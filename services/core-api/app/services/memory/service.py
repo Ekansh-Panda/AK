@@ -29,11 +29,22 @@ class MemoryService:
 
     @staticmethod
     def _select_provider(db: Session) -> MemoryProvider:
-        if settings.LITE_MODE:
+        # Runtime DB setting "lite_mode" overrides the env default (Task 1.3).
+        from app.core.config import get_effective_bool
+        from app.services.settings_service import LITE_MODE_KEY
+
+        lite = get_effective_bool(db, LITE_MODE_KEY, settings.LITE_MODE)
+        if lite:
             return SqliteMemoryProvider(db)
-        # TODO(Odysseus/Khoj): return a vector-backed provider here.
-        logger.info("LITE_MODE off but no heavy provider wired; using sqlite-lite")
-        return SqliteMemoryProvider(db)
+        # Heavy path: semantic embedding memory. Falls back to sqlite-lite if
+        # sentence-transformers isn't installed, so it never breaks low-end boxes.
+        try:
+            from app.services.memory.embedding_memory import EmbeddingMemoryProvider
+
+            return EmbeddingMemoryProvider(db)
+        except Exception as exc:  # noqa: BLE001 - optional heavy dep absent
+            logger.info("Embedding memory unavailable (%s); using sqlite-lite", exc)
+            return SqliteMemoryProvider(db)
 
     @property
     def provider_name(self) -> str:

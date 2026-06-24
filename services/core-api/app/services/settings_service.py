@@ -13,6 +13,9 @@ from app.models.setting import Setting
 
 # Well-known keys.
 ACTIVE_PROVIDER_KEY = "active_provider"
+PERSONA_MODE_KEY = "persona_mode"
+LITE_MODE_KEY = "lite_mode"
+AGENT_MODE_KEY = "agent_mode"
 
 
 class SettingsService:
