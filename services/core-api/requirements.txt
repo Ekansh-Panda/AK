@@ -7,6 +7,16 @@ SQLAlchemy==2.0.36
 python-multipart==0.0.20
 websockets==14.1
 
+# Real providers (OpenAI-compatible, Gemini) + PDF file ingestion. Light deps,
+# but imported LAZILY (inside functions) so the app still imports and runs in
+# lite-mode even when they are absent.
+httpx==0.28.1
+pypdf==5.1.0
+
+# --- dev/test ---
+# pytest is dev-only; run the suite under tests/ after `pip install`.
+pytest==8.3.4
+
 # TODO(Odysseus/Khoj): optional heavy deps (embeddings, vector stores, real
 # model SDKs, APScheduler) live behind LITE_MODE and are NOT installed by
 # default to keep low-end machines usable.

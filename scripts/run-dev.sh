@@ -20,7 +20,7 @@ run_api() {
 }
 
 run_desktop() {
-  echo "→ desktop (Vite) on http://localhost:5173"
+  echo "→ desktop (Vite) on http://localhost:1420"
   cd "$ROOT/apps/desktop"
   exec pnpm dev
 }

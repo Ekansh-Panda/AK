@@ -8,7 +8,7 @@
  * TODO(remote-backend): delete this file once `src/lib/api.ts` talks to the real
  *   endpoints (/api/remote, /ws/remote, /api/chat).
  */
-import type { DeviceStatus, PowerState } from "./types";
+import type { DeviceStatus, HostFile, PowerState, TaskItem } from "./types";
 
 export const MOCK_HOST_NAME = "miori-host";
 export const MOCK_VERSION = "0.1.0";
@@ -49,7 +49,64 @@ export function makeMockDeviceStatus(): DeviceStatus {
     power: _power,
     platform: "Linux",
     isMock: true,
+    source: "mock",
+    deviceCount: 1,
+    taskCount: MOCK_TASKS.length,
+    deviceId: "mock-device",
+    deviceName: MOCK_HOST_NAME,
   };
+}
+
+/** Canned tasks for the offline fallback. */
+export const MOCK_TASKS: TaskItem[] = [
+  {
+    id: "mock-task-1",
+    title: "Summarise the dropped notes",
+    description: "Pull the key points out of today's uploads.",
+    status: "in_progress",
+    dueAt: null,
+    isMock: true,
+  },
+  {
+    id: "mock-task-2",
+    title: "Watch the host's disk space",
+    description: null,
+    status: "pending",
+    dueAt: null,
+    isMock: true,
+  },
+  {
+    id: "mock-task-3",
+    title: "Nightly memory digest",
+    description: "Roll up the day's conversations.",
+    status: "done",
+    dueAt: null,
+    isMock: true,
+  },
+];
+
+export function makeMockTasks(): TaskItem[] {
+  return MOCK_TASKS.map((t) => ({ ...t }));
+}
+
+/** Canned uploaded-file listing for the offline fallback. */
+export function makeMockFiles(): HostFile[] {
+  return [
+    {
+      id: "mock-file-1",
+      filename: "meeting-notes.pdf",
+      contentType: "application/pdf",
+      sizeBytes: 184_320,
+      status: "ready",
+    },
+    {
+      id: "mock-file-2",
+      filename: "diagram.png",
+      contentType: "image/png",
+      sizeBytes: 52_104,
+      status: "ready",
+    },
+  ];
 }
 
 /**

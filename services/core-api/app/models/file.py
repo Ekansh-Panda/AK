@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
@@ -20,3 +20,5 @@ class FileRecord(UUIDMixin, TimestampMixin, Base):
     storage_path: Mapped[str] = mapped_column(String(1024))
     # "uploaded" | "ingesting" | "ingested" | "failed"
     status: Mapped[str] = mapped_column(String(32), default="uploaded")
+    # Best-effort extracted text for supported types (None for binary/unknown).
+    extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)

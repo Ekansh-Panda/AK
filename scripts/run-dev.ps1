@@ -13,7 +13,7 @@ function Run-Api {
   uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 }
 function Run-Desktop {
-  Write-Host "-> desktop (Vite) on http://localhost:5173"
+  Write-Host "-> desktop (Vite) on http://localhost:1420"
   Set-Location (Join-Path $Root "apps/desktop"); pnpm dev
 }
 function Run-Remote {

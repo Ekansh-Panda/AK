@@ -48,6 +48,35 @@ async def lifespan(app: FastAPI):
     logger.info("Starting %s v%s", settings.APP_NAME, settings.APP_VERSION)
     init_db()
     register_example_tools()
+
+    # Hydrate the active provider selection from persisted settings, then log a
+    # concise availability summary. Mock is always available, so this never
+    # blocks boot.
+    from app.db.session import SessionLocal
+    from app.services.providers.registry import registry as provider_registry
+
+    db = SessionLocal()
+    try:
+        active = provider_registry.load_active(db)
+    finally:
+        db.close()
+
+    avail = provider_registry.availability()
+    configured = [a.name for a in avail if a.configured]
+    logger.info("DB path: %s", settings.DATABASE_URL)
+    logger.info("Lite mode: %s", settings.LITE_MODE)
+    logger.info(
+        "Providers — active=%s, configured=%s",
+        active,
+        ", ".join(configured) if configured else "none (mock only)",
+    )
+    for a in avail:
+        logger.info(
+            "  provider %-8s configured=%s available=%s",
+            a.name,
+            a.configured,
+            a.available,
+        )
     logger.info(
         "Boot complete (lite_mode=%s, remote_enabled=%s)",
         settings.LITE_MODE,

@@ -1,17 +1,21 @@
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { UploadCloud, File as FileIcon, CheckCircle2, X } from "lucide-react";
 import { Button } from "@/components/Button";
 import { GlassCard } from "@/components/GlassCard";
 import { ScreenHeader } from "@/components/ScreenHeader";
-import { uploadFile } from "@/lib/api";
+import { getFiles, uploadFile } from "@/lib/api";
 import { useConnection } from "@/state/connection";
-import type { UploadResult } from "@/lib/types";
+import type { HostFile, UploadResult } from "@/lib/types";
 
 type Phase = "idle" | "uploading" | "done" | "error";
 
-/** Upload a file from the phone to the host. Progress UI is mocked. */
+/**
+ * Upload a file from the phone to the host (POST /api/files, multipart) with
+ * real XHR progress, and list what's already on the host (GET /api/files).
+ * Falls back to an animated mock + canned listing when the host is unreachable.
+ */
 export function FilesScreen() {
-  const { host, token } = useConnection();
+  const { host, token, isMock } = useConnection();
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -19,6 +23,15 @@ export function FilesScreen() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [percent, setPercent] = useState(0);
   const [result, setResult] = useState<UploadResult | null>(null);
+  const [files, setFiles] = useState<HostFile[]>([]);
+
+  const loadFiles = useCallback(async () => {
+    setFiles(await getFiles({ host, token }));
+  }, [host, token]);
+
+  useEffect(() => {
+    void loadFiles();
+  }, [loadFiles]);
 
   function pick() {
     inputRef.current?.click();
@@ -45,6 +58,8 @@ export function FilesScreen() {
     abortRef.current = null;
     // Allow re-picking the same file.
     e.target.value = "";
+    // Refresh the host listing after a successful upload.
+    if (res.ok) void loadFiles();
   }
 
   function reset() {
@@ -117,7 +132,10 @@ export function FilesScreen() {
               </div>
               <p className="mt-1.5 text-xs text-ink-soft">
                 {phase === "uploading" && `Sending… ${percent}%`}
-                {phase === "done" && "Delivered to the host (mock)."}
+                {phase === "done" &&
+                  (isMock
+                    ? "Delivered (offline mock)."
+                    : "Delivered to the host.")}
                 {phase === "error" && (
                   <span className="text-danger">
                     {result?.error ?? "Upload failed."}
@@ -134,10 +152,44 @@ export function FilesScreen() {
           </GlassCard>
         )}
 
-        <p className="mt-5 rounded-xl border border-warn/25 bg-warn/[0.06] px-4 py-2.5 text-center text-xs text-warn">
-          Mock upload — nothing leaves your phone yet. Real transfer hits{" "}
-          <code className="font-mono">/api/remote/upload</code>.
-        </p>
+        {/* Host listing */}
+        <section className="mt-5">
+          <h2 className="mb-2 px-1 text-sm font-semibold text-ink-soft">
+            On the host
+          </h2>
+          {files.length === 0 ? (
+            <GlassCard className="text-center text-sm text-ink-faint">
+              Nothing here yet — your uploads will show up here.
+            </GlassCard>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {files.map((f) => (
+                <GlassCard key={f.id} className="flex items-center gap-3 py-3">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/[0.06]">
+                    <FileIcon className="h-4 w-4 text-ink-soft" aria-hidden />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{f.filename}</p>
+                    <p className="text-xs text-ink-faint">
+                      {formatBytes(f.sizeBytes)}
+                      {f.contentType ? ` · ${f.contentType}` : ""}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide text-ink-soft">
+                    {f.status}
+                  </span>
+                </GlassCard>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {isMock && (
+          <p className="mt-5 rounded-xl border border-warn/25 bg-warn/[0.06] px-4 py-2.5 text-center text-xs text-warn">
+            Offline — uploads are simulated and the listing is canned. Connect to
+            a reachable host to send files for real.
+          </p>
+        )}
       </div>
     </main>
   );

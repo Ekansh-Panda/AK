@@ -91,7 +91,7 @@ export function LoginScreen() {
 
         <p className="mt-6 flex items-center justify-center gap-1.5 text-center text-xs text-ink-faint">
           <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
-          LAN-only · auth is mocked in this build
+          LAN-only · falls back to an offline demo if the host is unreachable
         </p>
       </div>
     </main>

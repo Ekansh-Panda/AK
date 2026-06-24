@@ -33,6 +33,14 @@ class ModelProvider(ABC):
 
     name: str = "base"
 
+    def available(self) -> bool:
+        """Whether this provider is usable right now (e.g. API key present).
+
+        Defaults to True so offline providers (mock) are always available. Real
+        providers override this to report missing credentials without crashing.
+        """
+        return True
+
     @abstractmethod
     def list_models(self) -> list[ModelDescriptor]:
         """Return the models this provider exposes."""

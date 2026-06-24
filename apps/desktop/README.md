@@ -66,7 +66,11 @@ npm run preview      # preview the built web bundle
 
 ---
 
-## Connecting a backend (optional)
+## Connecting a backend
+
+The app talks to the **Miori Core API** (`services/core-api`, FastAPI). It is
+wired to the real contract but the backend stays **optional** — every call
+degrades gracefully to mock/empty data so the shell never hard-crashes offline.
 
 By default the app targets:
 
@@ -81,8 +85,46 @@ VITE_MIORI_API=http://localhost:8000/api
 VITE_MIORI_WS=ws://localhost:8000/ws/chat
 ```
 
-When a call fails or times out (~2.5s), the app transparently uses mocks and the
-status bar shows **"Offline · mocks."**
+### What talks to what
+
+All HTTP lives in [`src/lib/api.ts`](./src/lib/api.ts), a typed client whose
+request/response shapes mirror `services/core-api/app/schemas/*.py` exactly:
+
+| Area     | Endpoints                                                                              |
+| -------- | -------------------------------------------------------------------------------------- |
+| Chat     | `POST /chat`, `POST /chat/sessions`, `GET /chat/sessions/{id}/messages`, `WS /ws/chat` |
+| Memory   | `GET/POST /memory` (`?kind=&pinned=&limit=`), `POST /memory/search`, `GET/PATCH/DELETE /memory/{id}` |
+| Files    | `POST /files` (multipart), `GET /files`, `GET /files/{id}`, `DELETE /files/{id}`       |
+| Tasks    | `GET/POST /tasks`, `GET/PATCH/DELETE /tasks/{id}`                                       |
+| Persona  | `GET /persona`, `GET /persona/modes`, `POST /persona/mode`                              |
+| Providers| `GET /providers`, `GET /providers/models`, `GET /providers/status`, `PUT /providers/active` |
+| Settings | `GET/PUT /settings`, `GET/DELETE /settings/{key}`                                       |
+| Remote   | `GET /remote/devices`, `GET /remote/sessions` (read-only-ish; gated on `remote_enabled`) |
+| Health   | `GET /health` (server root — the client strips `/api` from the base)                   |
+
+- **Chat** (`state/ChatStore.tsx`) creates/loads a session, hydrates history,
+  then streams replies over `WS /ws/chat` via `src/lib/ws.ts`. The Chat view
+  shows the live persona mode + active provider; both fall back to "mock" when
+  the socket/HTTP is unreachable.
+- **Files** uploads via `FormData`; oversize (>25 MB) is caught client-side and
+  the server's `413` is surfaced as a friendly notice. Click a file to preview
+  its `extracted_text`.
+- **Memory / Tasks** are full CRUD with pin/edit/delete (memory) and
+  status-toggle/delete (tasks); optimistic updates re-sync from the server.
+- **Settings** drives the active provider (`PUT /providers/active`), the backend
+  persona mode (`POST /persona/mode`), and a **Lite mode** toggle persisted via
+  `PUT /settings` under the `lite_mode` key.
+- **Connection** (`state/ConnectionStore.tsx`) polls `GET /health` +
+  `GET /providers/status` to drive the presence/connection badge and the
+  active-model indicator. Polling backs off politely (15 s when up, 30 s when
+  down) and never tight-loops.
+
+### Offline / fallback behavior
+
+When a call fails or times out (~2.5 s), the client returns a sensible fallback
+(mock data or an empty list) and the status bar shows **"Offline · mocks."**
+Mutations against a down backend update the UI optimistically but won't persist;
+affected views show a small "changes won't persist" hint.
 
 ---
 
