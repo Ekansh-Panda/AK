@@ -64,3 +64,11 @@ class ModelProvider(ABC):
         system_prompt: str | None = None,
     ) -> AsyncIterator[str]:
         """Yield completion tokens/chunks as they are produced."""
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        """Return embeddings for ``texts``. Optional capability.
+
+        Defaults to NotImplementedError so callers can probe and fall back (e.g.
+        to a local sentence-transformers model) without crashing.
+        """
+        raise NotImplementedError(f"{self.name} provider does not support embeddings")

@@ -14,9 +14,18 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.services.providers.base import ModelProvider
+from app.services.providers.cloudflare import CloudflareProvider
+from app.services.providers.cohere import CohereProvider
 from app.services.providers.gemini import GeminiProvider
+from app.services.providers.huggingface import HuggingFaceProvider
 from app.services.providers.mock_provider import MockProvider
 from app.services.providers.openai_compatible import OpenAICompatibleProvider
+from app.services.providers.openai_family import (
+    GroqProvider,
+    MistralProvider,
+    OpenRouterProvider,
+    SambaNovaProvider,
+)
 from app.services.settings_service import ACTIVE_PROVIDER_KEY, SettingsService
 
 logger = get_logger(__name__)
@@ -117,3 +126,10 @@ registry = ProviderRegistry()
 registry.register(MockProvider(), default=True)
 registry.register(OpenAICompatibleProvider())
 registry.register(GeminiProvider())
+registry.register(GroqProvider())
+registry.register(MistralProvider())
+registry.register(SambaNovaProvider())
+registry.register(OpenRouterProvider())
+registry.register(HuggingFaceProvider())
+registry.register(CohereProvider())
+registry.register(CloudflareProvider())

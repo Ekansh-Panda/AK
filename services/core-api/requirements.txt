@@ -20,3 +20,7 @@ pytest==8.3.4
 # TODO(Odysseus/Khoj): optional heavy deps (embeddings, vector stores, real
 # model SDKs, APScheduler) live behind LITE_MODE and are NOT installed by
 # default to keep low-end machines usable.
+
+# Optional provider SDKs (lazy-imported; install only if you use these providers)
+huggingface_hub>=0.24
+cohere>=5.11

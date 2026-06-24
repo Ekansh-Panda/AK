@@ -92,6 +92,35 @@ class Settings(BaseSettings):
         """Effective Gemini key (GEMINI_API_KEY wins, GOOGLE_API_KEY fallback)."""
         return self.GEMINI_API_KEY or self.GOOGLE_API_KEY
 
+    # Groq (OpenAI-compatible).
+    GROQ_API_KEY: str | None = None
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+
+    # Mistral (OpenAI-compatible).
+    MISTRAL_API_KEY: str | None = None
+    MISTRAL_MODEL: str = "mistral-small-latest"
+
+    # SambaNova (OpenAI-compatible).
+    SAMBANOVA_API_KEY: str | None = None
+    SAMBANOVA_MODEL: str = "Meta-Llama-3.1-8B-Instruct"
+
+    # OpenRouter (OpenAI-compatible).
+    OPENROUTER_API_KEY: str | None = None
+    OPENROUTER_MODEL: str = "openai/gpt-4o-mini"
+
+    # Hugging Face Inference.
+    HUGGINGFACE_API_KEY: str | None = None
+    HUGGINGFACE_MODEL: str = "meta-llama/Llama-3.1-8B-Instruct"
+
+    # Cohere.
+    COHERE_API_KEY: str | None = None
+    COHERE_MODEL: str = "command-r"
+
+    # Cloudflare Workers AI.
+    CLOUDFLARE_API_KEY: str | None = None
+    CLOUDFLARE_ACCOUNT_ID: str | None = None
+    CLOUDFLARE_MODEL: str = "@cf/meta/llama-3.1-8b-instruct"
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def _split_cors(cls, value: object) -> object:
@@ -107,3 +136,24 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+
+_TRUTHY = {"1", "true", "yes", "on"}
+
+
+def get_effective_bool(db: object | None, key: str, default: bool) -> bool:
+    """Resolve a boolean flag: DB setting (runtime) overrides env (default).
+
+    ``db`` is an optional SQLAlchemy Session. When provided and the key exists in
+    the ``settings`` table, that value wins; otherwise the env/default is used.
+    Lazy-imports SettingsService to avoid an import cycle.
+    """
+    if db is not None:
+        try:
+            from app.services.settings_service import SettingsService
+
+            raw = SettingsService(db).get(key)  # type: ignore[arg-type]
+            if raw is not None:
+                return str(raw).strip().lower() in _TRUTHY
+        except Exception:  # noqa: BLE001 - never let config resolution crash
+            pass
+    return default

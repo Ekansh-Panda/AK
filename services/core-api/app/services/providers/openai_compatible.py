@@ -25,14 +25,20 @@ logger = get_logger(__name__)
 class OpenAICompatibleProvider(ModelProvider):
     name = "openai"
 
+    # Sentinel so subclasses can pass an explicit ``None`` key (= unconfigured)
+    # without silently inheriting OPENAI_API_KEY.
+    _UNSET = object()
+
     def __init__(
         self,
         *,
-        api_key: str | None = None,
+        api_key: object = _UNSET,
         base_url: str | None = None,
         model: str | None = None,
     ) -> None:
-        self._api_key = api_key if api_key is not None else settings.OPENAI_API_KEY
+        self._api_key = (
+            settings.OPENAI_API_KEY if api_key is self._UNSET else api_key  # type: ignore[assignment]
+        )
         self._base_url = (base_url or settings.OPENAI_BASE_URL).rstrip("/")
         self._model = model or settings.OPENAI_MODEL
 
@@ -138,6 +144,21 @@ class OpenAICompatibleProvider(ModelProvider):
                         continue
                     if token:
                         yield token
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        if not self.available():
+            raise RuntimeError("OpenAI provider unavailable: missing OPENAI_API_KEY")
+        import httpx  # lazy
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(
+                f"{self._base_url}/embeddings",
+                headers=self._headers(),
+                json={"model": "text-embedding-3-small", "input": texts},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        return [row["embedding"] for row in data.get("data", [])]
 
     # Alias to match callers that expect chat_stream().
     chat_stream = stream

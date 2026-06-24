@@ -24,6 +24,8 @@ MODES: dict[str, str] = {
     "coder": "precise, pragmatic pair-programmer",
 }
 
+DEFAULT_MODE = "friend"
+
 # Built-in fallback prompts used when no prompt file exists on disk.
 _FALLBACK_PROMPTS: dict[str, str] = {
     "friend": (
@@ -49,7 +51,6 @@ _FALLBACK_PROMPTS: dict[str, str] = {
 class PersonaService:
     def __init__(self, config: PersonaConfig | None = None) -> None:
         self._config = config or PersonaConfig()
-        self._active_mode = self._config.relationship_mode
         self._prompts_dir = Path(settings.PROMPTS_DIR)
         self._manifest: dict | None = None
 
@@ -107,17 +108,14 @@ class PersonaService:
     def list_modes(self) -> list[str]:
         return list(MODES.keys())
 
-    def set_mode(self, mode: str) -> str:
-        if mode not in MODES:
-            raise ValueError(f"Unknown persona mode '{mode}'")
-        self._active_mode = mode
-        self._config.relationship_mode = mode
-        logger.info("Persona mode set to %s", mode)
-        return mode
+    @staticmethod
+    def is_valid_mode(mode: str | None) -> bool:
+        return mode in MODES
 
-    @property
-    def active_mode(self) -> str:
-        return self._active_mode
+    @staticmethod
+    def normalize_mode(mode: str | None) -> str:
+        """Coerce to a known mode, defaulting to DEFAULT_MODE."""
+        return mode if mode in MODES else DEFAULT_MODE
 
     # --- prompts ---
     def _load_prompt_file(self, mode: str) -> str | None:
@@ -142,29 +140,29 @@ class PersonaService:
                 logger.warning("Could not read prompt %s: %s", candidate, exc)
         return None
 
-    def active_prompt(self) -> str:
-        """Return the composed system prompt for the active mode.
+    def build_prompt(self, mode: str | None, context: str | None = None) -> str:
+        """Compose the system prompt for ``mode`` (stateless).
 
-        Composition mirrors the prompt pack design: the shared voice fragment is
-        prepended to the mode-specific prompt. Degrades gracefully to a built-in
-        fallback if no prompt file is found, so the API never fails to boot.
+        The shared voice fragment is prepended to the mode-specific prompt;
+        degrades to a built-in fallback if no prompt file is found. An optional
+        ``context`` block (e.g. recalled memories) is prepended ahead of both.
         """
-        mode = self._active_mode
+        mode = self.normalize_mode(mode)
         loaded = self._load_prompt_file(mode)
         if loaded:
             shared = self._shared_voice()
-            return f"{shared}\n\n{loaded}".strip() if shared else loaded
-        logger.debug(
-            "No prompt file for mode '%s' in %s; using fallback",
-            mode,
-            self._prompts_dir,
-        )
-        return _FALLBACK_PROMPTS.get(mode, _FALLBACK_PROMPTS["friend"])
+            base = f"{shared}\n\n{loaded}".strip() if shared else loaded
+        else:
+            logger.debug(
+                "No prompt file for mode '%s' in %s; using fallback",
+                mode,
+                self._prompts_dir,
+            )
+            base = _FALLBACK_PROMPTS.get(mode, _FALLBACK_PROMPTS[DEFAULT_MODE])
+        if context:
+            return f"{context}\n\n{base}".strip()
+        return base
 
     # --- config ---
     def get_persona(self) -> PersonaConfig:
         return self._config
-
-
-# Process-wide default persona service.
-persona_service = PersonaService()

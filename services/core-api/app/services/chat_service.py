@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.logging import get_logger
 from app.models.message import Message
 from app.models.session import ChatSession
-from app.services.persona.service import PersonaService, persona_service
+from app.services.persona.service import DEFAULT_MODE, PersonaService
 from app.services.providers.base import ChatMessage
 from app.services.providers.registry import ProviderRegistry
 from app.services.providers.registry import registry as provider_registry
@@ -35,7 +35,7 @@ class ChatService:
     ) -> None:
         self._db = db
         self._providers = providers or provider_registry
-        self._persona = persona or persona_service
+        self._persona = persona or PersonaService()
 
     # --- sessions ---
     def get_or_create_session(
@@ -47,15 +47,31 @@ class ChatService:
     ) -> ChatSession:
         if session_id:
             existing = self._db.get(ChatSession, session_id)
-            if existing:
+            # Only reuse a session the caller owns (None owner = legacy/shared).
+            if existing and (
+                existing.user_id is None
+                or user_id is None
+                or existing.user_id == user_id
+            ):
                 return existing
         session = ChatSession(
-            persona_mode=persona_mode or self._persona.active_mode,
+            persona_mode=PersonaService.normalize_mode(persona_mode),
             user_id=user_id,
         )
         self._db.add(session)
         self._db.commit()
         self._db.refresh(session)
+        return session
+
+    def get_owned_session(
+        self, session_id: str, user_id: str | None
+    ) -> ChatSession | None:
+        """Return the session only if owned by ``user_id`` (else None)."""
+        session = self._db.get(ChatSession, session_id)
+        if session is None:
+            return None
+        if session.user_id is not None and user_id is not None and session.user_id != user_id:
+            return None
         return session
 
     def history(self, session_id: str) -> list[Message]:
@@ -73,13 +89,22 @@ class ChatService:
         self._db.refresh(msg)
         return msg
 
-    def _build_provider_messages(self, session_id: str, new_user_text: str) -> list[ChatMessage]:
-        msgs = [
+    def _build_provider_messages(self, session_id: str) -> list[ChatMessage]:
+        # History already includes the just-persisted user message — do not
+        # append it again (that caused a duplicate user turn).
+        return [
             ChatMessage(role=m.role, content=m.content)
             for m in self.history(session_id)
         ]
-        msgs.append(ChatMessage(role="user", content=new_user_text))
-        return msgs
+
+    def _resolve_mode(self, session: ChatSession, persona_mode: str | None) -> str:
+        """Per-session persona mode. If a valid override is passed, persist it."""
+        if persona_mode and PersonaService.is_valid_mode(persona_mode):
+            if session.persona_mode != persona_mode:
+                session.persona_mode = persona_mode
+                self._db.commit()
+            return persona_mode
+        return PersonaService.normalize_mode(session.persona_mode)
 
     # --- turns ---
     async def respond(
@@ -92,15 +117,14 @@ class ChatService:
         user_id: str | None = None,
     ) -> tuple[ChatSession, Message]:
         """Single-shot turn: persist user msg, get reply, persist + return it."""
-        if persona_mode:
-            self._persona.set_mode(persona_mode)
         session = self.get_or_create_session(
             session_id, persona_mode=persona_mode, user_id=user_id
         )
+        mode = self._resolve_mode(session, persona_mode)
         self._persist(session.id, "user", user_text)
         provider = self._providers.get()
-        msgs = self._build_provider_messages(session.id, user_text)
-        system_prompt = self._persona.active_prompt()
+        msgs = self._build_provider_messages(session.id)
+        system_prompt = self._persona.build_prompt(mode)
         try:
             reply_text = await provider.chat(
                 msgs, model=model, system_prompt=system_prompt
@@ -127,17 +151,16 @@ class ChatService:
         Persists the user message up front and the full assistant message at the
         end.
         """
-        if persona_mode:
-            self._persona.set_mode(persona_mode)
         session = self.get_or_create_session(
             session_id, persona_mode=persona_mode, user_id=user_id
         )
+        mode = self._resolve_mode(session, persona_mode)
         self._persist(session.id, "user", user_text)
         yield ("session", session.id)
 
         provider = self._providers.get()
-        msgs = self._build_provider_messages(session.id, user_text)
-        system_prompt = self._persona.active_prompt()
+        msgs = self._build_provider_messages(session.id)
+        system_prompt = self._persona.build_prompt(mode)
         chunks: list[str] = []
         try:
             async for chunk in provider.stream(
