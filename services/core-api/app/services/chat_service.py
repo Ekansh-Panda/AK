@@ -8,15 +8,21 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.logging import get_logger
 from app.models.message import Message
 from app.models.session import ChatSession
 from app.services.persona.service import PersonaService, persona_service
 from app.services.providers.base import ChatMessage
 from app.services.providers.registry import ProviderRegistry
 from app.services.providers.registry import registry as provider_registry
+
+logger = get_logger(__name__)
+
+# Summarize a session after every N assistant turns (cheap, best-effort).
+SUMMARIZE_EVERY = 10
 
 
 class ChatService:
@@ -93,12 +99,18 @@ class ChatService:
         )
         self._persist(session.id, "user", user_text)
         provider = self._providers.get()
-        reply_text = await provider.chat(
-            self._build_provider_messages(session.id, user_text),
-            model=model,
-            system_prompt=self._persona.active_prompt(),
-        )
+        msgs = self._build_provider_messages(session.id, user_text)
+        system_prompt = self._persona.active_prompt()
+        try:
+            reply_text = await provider.chat(
+                msgs, model=model, system_prompt=system_prompt
+            )
+        except Exception as exc:  # noqa: BLE001 - fall back to mock on failure
+            logger.warning("Provider %s chat failed, using mock: %s", provider.name, exc)
+            provider = self._providers.get("mock")
+            reply_text = await provider.chat(msgs, system_prompt=system_prompt)
         reply = self._persist(session.id, "assistant", reply_text, model=provider.name)
+        await self._maybe_summarize(session.id)
         return session, reply
 
     async def stream_response(
@@ -124,14 +136,50 @@ class ChatService:
         yield ("session", session.id)
 
         provider = self._providers.get()
+        msgs = self._build_provider_messages(session.id, user_text)
+        system_prompt = self._persona.active_prompt()
         chunks: list[str] = []
-        async for chunk in provider.stream(
-            self._build_provider_messages(session.id, user_text),
-            model=model,
-            system_prompt=self._persona.active_prompt(),
-        ):
-            chunks.append(chunk)
-            yield ("token", chunk)
+        try:
+            async for chunk in provider.stream(
+                msgs, model=model, system_prompt=system_prompt
+            ):
+                chunks.append(chunk)
+                yield ("token", chunk)
+        except Exception as exc:  # noqa: BLE001 - degrade to mock mid-failure
+            logger.warning(
+                "Provider %s stream failed, using mock: %s", provider.name, exc
+            )
+            # Only fall back cleanly if nothing was streamed yet.
+            if not chunks:
+                provider = self._providers.get("mock")
+                async for chunk in provider.stream(msgs, system_prompt=system_prompt):
+                    chunks.append(chunk)
+                    yield ("token", chunk)
+            else:
+                yield ("error", f"provider error: {exc}")
 
-        self._persist(session.id, "assistant", "".join(chunks).strip(), model=provider.name)
+        self._persist(
+            session.id, "assistant", "".join(chunks).strip(), model=provider.name
+        )
+        await self._maybe_summarize(session.id)
         yield ("done", session.id)
+
+    # --- summarization hook ---
+    async def _maybe_summarize(self, session_id: str) -> None:
+        """Best-effort: every SUMMARIZE_EVERY assistant turns, store a summary.
+
+        Swallows all errors so a failed summary never breaks a chat turn.
+        """
+        try:
+            n_assistant = self._db.execute(
+                select(func.count())
+                .select_from(Message)
+                .where(Message.session_id == session_id)
+                .where(Message.role == "assistant")
+            ).scalar_one()
+            if n_assistant and n_assistant % SUMMARIZE_EVERY == 0:
+                from app.services.memory.service import MemoryService
+
+                await MemoryService(self._db).summarize_session(session_id)
+        except Exception as exc:  # noqa: BLE001 - non-blocking, best-effort
+            logger.debug("summarize hook skipped: %s", exc)

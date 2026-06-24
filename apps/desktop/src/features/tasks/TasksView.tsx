@@ -1,37 +1,79 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { Plus, Check } from "lucide-react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Plus, Check, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { api } from "@/lib/api";
-import { uid } from "@/lib/mockData";
+import { mockTasks } from "@/lib/mockData";
 import { cn } from "@/lib/cn";
-import type { TaskItem } from "@/lib/types";
+import type { ApiTask } from "@/lib/types";
+
+function isDone(t: ApiTask): boolean {
+  return t.status === "done" || t.status === "completed";
+}
 
 export function TasksView() {
-  const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [tasks, setTasks] = useState<ApiTask[]>([]);
+  const [offline, setOffline] = useState(false);
   const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    void api.getTasks().then(setTasks);
+  const load = useCallback(async () => {
+    const r = await api.listTasks();
+    setOffline(!r.ok);
+    if (r.ok) {
+      setTasks(r.data);
+    } else {
+      // Read-only fallback derived from the mock tasks.
+      setTasks(
+        mockTasks.map((t) => ({
+          id: t.id,
+          created_at: new Date(t.createdAt).toISOString(),
+          updated_at: new Date(t.createdAt).toISOString(),
+          user_id: null,
+          title: t.title,
+          description: null,
+          status: t.done ? "done" : "open",
+          due_at: null,
+        })),
+      );
+    }
   }, []);
 
-  const add = (e: FormEvent) => {
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const add = async (e: FormEvent) => {
     e.preventDefault();
     const title = draft.trim();
     if (!title) return;
-    setTasks((prev) => [
-      { id: uid("task"), title, done: false, createdAt: Date.now() },
-      ...prev,
-    ]);
-    setDraft("");
+    setBusy(true);
+    try {
+      const r = await api.createTask({ title });
+      if (r.ok) {
+        setDraft("");
+        await load();
+      }
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const toggle = (id: string) =>
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
+  const toggle = async (t: ApiTask) => {
+    const next = isDone(t) ? "open" : "done";
+    setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: next } : x)));
+    await api.updateTask(t.id, { status: next });
+    void load();
+  };
 
-  const open = tasks.filter((t) => !t.done);
-  const done = tasks.filter((t) => t.done);
+  const remove = async (id: string) => {
+    setTasks((prev) => prev.filter((x) => x.id !== id));
+    await api.deleteTask(id);
+  };
+
+  const open = tasks.filter((t) => !isDone(t));
+  const done = tasks.filter((t) => isDone(t));
 
   return (
     <PageContainer title="Tasks" subtitle="Small things Miori is helping you track.">
@@ -41,39 +83,55 @@ export function TasksView() {
           onChange={(e) => setDraft(e.target.value)}
           placeholder="Add a task…"
         />
-        <Button type="submit" variant="primary" size="icon" aria-label="Add task">
+        <Button type="submit" variant="primary" size="icon" aria-label="Add task" disabled={busy}>
           <Plus size={18} />
         </Button>
       </form>
 
+      {offline && (
+        <p className="mb-4 text-xs text-ink-faint">
+          Backend unreachable — showing a local fallback (changes won't persist).
+        </p>
+      )}
+
       <ul className="space-y-2">
-        {[...open, ...done].map((t) => (
-          <li
-            key={t.id}
-            className="glass-soft flex items-center gap-3 rounded px-4 py-3"
-          >
-            <button
-              onClick={() => toggle(t.id)}
-              aria-label={t.done ? "Mark not done" : "Mark done"}
-              className={cn(
-                "grid h-5 w-5 place-items-center rounded-sm border transition-colors",
-                t.done
-                  ? "border-accent bg-accent/80 text-canvas"
-                  : "border-white/20 hover:border-accent/60",
-              )}
+        {[...open, ...done].map((t) => {
+          const done = isDone(t);
+          return (
+            <li
+              key={t.id}
+              className="glass-soft flex items-center gap-3 rounded px-4 py-3"
             >
-              {t.done && <Check size={13} />}
-            </button>
-            <span
-              className={cn(
-                "flex-1 text-sm",
-                t.done ? "text-ink-faint line-through" : "text-ink",
-              )}
-            >
-              {t.title}
-            </span>
-          </li>
-        ))}
+              <button
+                onClick={() => void toggle(t)}
+                aria-label={done ? "Mark not done" : "Mark done"}
+                className={cn(
+                  "grid h-5 w-5 place-items-center rounded-sm border transition-colors",
+                  done
+                    ? "border-accent bg-accent/80 text-canvas"
+                    : "border-white/20 hover:border-accent/60",
+                )}
+              >
+                {done && <Check size={13} />}
+              </button>
+              <span
+                className={cn(
+                  "flex-1 text-sm",
+                  done ? "text-ink-faint line-through" : "text-ink",
+                )}
+              >
+                {t.title}
+              </span>
+              <button
+                onClick={() => void remove(t.id)}
+                aria-label="Delete task"
+                className="text-ink-faint transition-colors hover:text-danger"
+              >
+                <Trash2 size={15} />
+              </button>
+            </li>
+          );
+        })}
         {tasks.length === 0 && <li className="text-sm text-ink-faint">Nothing yet.</li>}
       </ul>
     </PageContainer>

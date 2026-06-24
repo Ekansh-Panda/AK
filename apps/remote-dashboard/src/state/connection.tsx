@@ -16,7 +16,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { connect as apiConnect } from "@/lib/api";
+import { connect as apiConnect, resetSession } from "@/lib/api";
 import type {
   Connection,
   ConnectionStatus,
@@ -42,6 +42,10 @@ interface ConnectionContextValue {
 
   /** True once a successful connect has happened this session. */
   isConnected: boolean;
+  /** True when the live host has the remote module enabled (device/power). */
+  remoteEnabled: boolean;
+  /** True when the session is running against the offline mock fallback. */
+  isMock: boolean;
 
   setHost: (host: string) => void;
   setToken: (token: string) => void;
@@ -79,6 +83,8 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   const [hostName, setHostName] = useState<string>();
   const [version, setVersion] = useState<string>();
   const [error, setError] = useState<string>();
+  const [remoteEnabled, setRemoteEnabled] = useState(false);
+  const [isMock, setIsMock] = useState(false);
 
   // Persist host/token whenever they change.
   useEffect(() => {
@@ -107,10 +113,14 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
 
       setStatus("connecting");
       setError(undefined);
+      // A fresh connection starts a fresh server-side chat session.
+      resetSession();
       const result = await apiConnect(conn);
       if (result.ok) {
         setHostName(result.hostName);
         setVersion(result.version);
+        setRemoteEnabled(result.remoteEnabled ?? false);
+        setIsMock(Boolean(result.isMock));
         setStatus("connected");
         return true;
       }
@@ -126,6 +136,9 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     setHostName(undefined);
     setVersion(undefined);
     setError(undefined);
+    setRemoteEnabled(false);
+    setIsMock(false);
+    resetSession();
   }, []);
 
   const value = useMemo<ConnectionContextValue>(
@@ -138,13 +151,28 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       error,
       theme,
       isConnected: status === "connected",
+      remoteEnabled,
+      isMock,
       setHost,
       setToken,
       setTheme,
       connect,
       disconnect,
     }),
-    [host, token, status, hostName, version, error, theme, connect, disconnect, setTheme],
+    [
+      host,
+      token,
+      status,
+      hostName,
+      version,
+      error,
+      theme,
+      remoteEnabled,
+      isMock,
+      connect,
+      disconnect,
+      setTheme,
+    ],
   );
 
   return (

@@ -8,10 +8,12 @@ It shares Miori Core's visual language with the desktop shell (near-black glass,
 a single warm violet accent, calm motion). The remote is a friend in your
 pocket, not a control panel.
 
-> **Status:** UI shell with mocked data. Every backend call is stubbed in
-> `src/lib/api.ts` and returns fabricated values so the app is fully explorable
-> before the `core-api` `remote` module exists. Mocked surfaces are clearly
-> labelled in the UI.
+> **Status:** Wired to the live **core-api** with an automatic offline mock
+> fallback. `src/lib/api.ts` probes the host on connect and talks to the real
+> endpoints when reachable; if the host can't be reached (or a call fails
+> mid-flight) it transparently falls back to fabricated data so the app stays
+> fully explorable with no backend. Offline/mocked surfaces are clearly labelled
+> in the UI.
 
 ## Stack
 
@@ -20,6 +22,23 @@ lucide-react · clsx. No `shadcn` runtime dependency — the small component set
 lives in `src/components`.
 
 ## Run it
+
+### 1. Start the backend (`services/core-api`)
+
+For device + power features the API must run with **`REMOTE_ENABLED=true`**
+(it's the default in `app/core/config.py`, but make it explicit for clarity).
+Bind to all interfaces so your phone can reach it over the LAN:
+
+```bash
+cd services/core-api
+REMOTE_ENABLED=true uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+Without `REMOTE_ENABLED=true` the `/api/remote/*` routes are not mounted; the
+dashboard still runs but the **Device** and **Power** tabs show a clear
+"remote control disabled" state (chat, files, and tasks keep working).
+
+### 2. Start the dashboard
 
 From this folder (`apps/remote-dashboard`):
 
@@ -33,6 +52,10 @@ Then, on your **phone on the same Wi-Fi**, open:
 ```
 http://<your-computer-LAN-ip>:5174
 ```
+
+On the login screen, enter the **host address** as
+`http://<your-computer-LAN-ip>:8000` (the core-api), plus a pairing token, and
+tap Connect.
 
 (`vite.config.ts` sets `server.host = true`, so the dev server binds to all
 interfaces. Find your LAN IP with `ipconfig` / `ifconfig` / `ip addr`.)
@@ -48,38 +71,75 @@ npm run typecheck  # tsc --noEmit
 `base` is `"./"` so the built `dist/` can be served from any path — including
 mounted behind the FastAPI core-api later (e.g. at `/remote`).
 
+## Environment variables
+
+| Var              | Default | Purpose                                                                                          |
+| ---------------- | ------- | ------------------------------------------------------------------------------------------------ |
+| `VITE_MIORI_API` | `/api`  | API path appended to the connected host, or an absolute base URL. Health is always probed at the host origin (`/health`), independent of this. |
+
+There is no build-time host/token: the **host address** and **pairing token**
+are entered at runtime on the login screen and persisted to `localStorage`
+(`src/state/connection.tsx`). Set `VITE_MIORI_API` only if your core-api mounts
+the API somewhere other than `/api`.
+
+## Live vs. offline mock
+
+`src/lib/api.ts` is the single source of host I/O and decides live-vs-mock at
+runtime:
+
+- **On connect** it probes `GET {host}/health`. A healthy response switches the
+  client to **live** mode and records the host version + whether
+  `REMOTE_ENABLED` is on.
+- If the host is **unreachable** (or any later call times out / errors), the
+  client transparently falls back to the **offline mock** — every screen still
+  works with simulated data, clearly labelled "Offline".
+- If the host is reachable but started **without** `REMOTE_ENABLED=true`, the
+  Device/Power tabs show a clear **"remote control disabled"** state instead of
+  failing; chat, files, and tasks remain live.
+
+Connection state (Live / Offline demo / remote-enabled) is shown on the
+**Settings** screen and in the header connection chip.
+
 ## Screens
 
-| Tab          | File                              | What it does                                       |
-| ------------ | --------------------------------- | -------------------------------------------------- |
-| (Login)      | `src/screens/LoginScreen.tsx`     | Host address + token, "Connect" (mocked auth)      |
-| Chat         | `src/screens/ChatScreen.tsx`      | Remote chat with mock token-by-token streaming     |
-| Device       | `src/screens/DeviceScreen.tsx`    | CPU / memory / uptime / online — labelled **mock** |
-| Power        | `src/screens/PowerScreen.tsx`     | Wake / Sleep toggle for the host assistant (mock)  |
-| Files        | `src/screens/FilesScreen.tsx`     | File picker + progress UI (mock upload)            |
-| Settings     | `src/screens/SettingsScreen.tsx`  | Host, token, theme, disconnect                     |
+| Tab          | File                              | What it does                                                       |
+| ------------ | --------------------------------- | ------------------------------------------------------------------ |
+| (Login)      | `src/screens/LoginScreen.tsx`     | Host address + token, "Connect" (probes `/health`)                 |
+| Chat         | `src/screens/ChatScreen.tsx`      | Remote chat via `POST /api/chat`, typed-in reply                   |
+| Device       | `src/screens/DeviceScreen.tsx`    | Online state, device + task counts, task list; remote-disabled aware |
+| Power        | `src/screens/PowerScreen.tsx`     | Wake / Sleep the primary device via `/api/remote/devices/{id}/…`   |
+| Files        | `src/screens/FilesScreen.tsx`     | Upload via `POST /api/files` (real progress) + host file listing   |
+| Settings     | `src/screens/SettingsScreen.tsx`  | Host, token, live/offline status, theme, disconnect                |
 
 A persistent connection chip (`src/components/ConnectionChip.tsx`) lives in
 every header, and a glassy bottom tab bar (`src/components/BottomNav.tsx`) is
 safe-area aware for notch / home-indicator phones.
 
-## How it connects to the backend (later)
+## How it connects to the backend
 
-All host I/O goes through the typed client in **`src/lib/api.ts`**. Today it
-returns mocks; each method documents the real endpoint it will call. Flip the
-`USE_MOCK` constant at the top of that file to `false` once the backend is live.
+All host I/O goes through the typed client in **`src/lib/api.ts`**, which talks
+to **`services/core-api`** (`REMOTE_ENABLED` flag in `app/core/config.py`).
 
-Target backend: **`services/core-api`**, module
-`services/core-api/app/services/remote` (`REMOTE_ENABLED` flag already exists in
-`app/core/config.py`).
+| Client method     | Real endpoint                                                              |
+| ----------------- | -------------------------------------------------------------------------- |
+| `connect`         | `GET  {host}/health`                                                       |
+| `sendMessage`     | `POST {host}/api/chat` `{ message, session_id? }` → `{ session_id, reply }` |
+| `getDeviceStatus` | `GET  {host}/health` + `GET {host}/api/remote/devices` (synthesised)       |
+| `getTasks`        | `GET  {host}/api/tasks`                                                     |
+| `setPowerState`   | `POST {host}/api/remote/devices/{id}/wake` \| `…/sleep`                     |
+| `uploadFile`      | `POST {host}/api/files` (multipart, field `file`) — real XHR progress      |
+| `getFiles`        | `GET  {host}/api/files`                                                     |
 
-| Client method        | Real endpoint (planned)                              |
-| -------------------- | ---------------------------------------------------- |
-| `connect`            | `GET  {host}/api/remote/ping`                        |
-| `getDeviceStatus`    | `GET  {host}/api/remote/status`                      |
-| `setPowerState`      | `POST {host}/api/remote/power`                       |
-| `uploadFile`         | `POST {host}/api/remote/upload` (multipart)          |
-| `sendMessage`        | `WS   {host}/ws/remote` (token stream), or `POST {host}/api/chat` |
+Notes:
+
+- The API base is `VITE_MIORI_API` (default `/api`) appended to the host;
+  `/health` is probed at the host **origin** (no `/api`).
+- The core-api has no single `/remote/status` route, so device status is
+  **synthesised** from `/health` (online) + `/remote/devices` (power state of
+  the first device). The chat session id from the first reply is reused on
+  subsequent turns for multi-turn context.
+- The `/api/remote/*` endpoints exist **only** when `REMOTE_ENABLED=true`; the
+  client treats their absence (404) as "remote disabled" rather than an error.
 
 Auth is sent as `Authorization: Bearer <token>` plus an `X-Miori-Remote: 1`
 header. The host address and token are kept in `src/state/connection.tsx` and
@@ -97,9 +157,10 @@ on the same trusted network.
   expose the host directly to the public internet. If remote-over-WAN is ever
   needed, front it with a VPN / reverse proxy with TLS and proper auth — do not
   port-forward the raw core-api.
-- The mocked auth in this build accepts any non-empty token (except the literal
-  `wrong`, used to demo the error state). Real validation happens host-side once
-  `/api/remote/ping` exists.
+- The token is forwarded to the host as a bearer header; actual validation is
+  host-side. When the host is unreachable the client falls back to the offline
+  mock, so the demo never hard-fails — but no real token check happens in that
+  fallback path.
 
 ## Project layout
 
@@ -116,13 +177,13 @@ apps/remote-dashboard/
    ├─ App.tsx                 Routes + auth guard + bottom-nav shell
    ├─ index.css               Tailwind + glass + safe-area utilities + tokens
    ├─ lib/
-   │  ├─ api.ts               typed host client (mocked; documents real paths)
-   │  ├─ types.ts             shared types
-   │  ├─ mock.ts              fabricated data + helpers
+   │  ├─ api.ts               typed host client (live + offline mock fallback)
+   │  ├─ types.ts             shared types (aligned to core-api schemas)
+   │  ├─ mock.ts              offline fallback data + helpers
    │  └─ cn.ts                class-name joiner
    ├─ state/
-   │  ├─ connection.tsx       host/token/theme/status context (persisted)
-   │  └─ chat.tsx             chat messages + mock streaming
+   │  ├─ connection.tsx       host/token/theme/status/remote-enabled context (persisted)
+   │  └─ chat.tsx             chat messages + typed reply
    ├─ components/
    │  ├─ BottomNav.tsx
    │  ├─ ConnectionChip.tsx

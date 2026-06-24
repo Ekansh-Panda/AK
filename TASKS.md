@@ -15,50 +15,56 @@ Miori must feel like a *friend, not a cockpit*, and stay usable on low-end machi
 
 The scaffold delivers:
 
-- [ ] Monorepo structure (`apps/`, `services/`, `packages/`)
-- [ ] Desktop app shell — Tauri + React + TS + Tailwind + shadcn/ui (`apps/desktop/`)
-- [ ] All 8 pages render: Chat, Files, Memory, Projects, Research, Tasks, Remote, Settings (`apps/desktop/src/features/*`)
-- [ ] Layout shell + sidebar + status bar (`apps/desktop/src/components/layout/`)
-- [ ] Presence orb stub (cheap CSS, no WebGL) (`apps/desktop/src/components/`)
-- [ ] Remote dashboard shell (`apps/remote-dashboard/`)
-- [ ] FastAPI app boots with REST `/api/*` + WS `/ws/*` registered (`services/core-api/`)
-- [ ] SQLAlchemy models for all 8 tables + SQLite engine/session (`services/core-api/app/models/*`, `db/*`)
-- [ ] Service-layer skeletons: memory, providers, tools, persona, remote, tasks, files (`services/core-api/app/services/*`)
-- [ ] Persona system skeleton with `friend`/`operator`/`researcher`/`coder` modes + prompt profiles (`packages/prompts/`)
-- [ ] Provider abstraction with lite `echo` default (`services/core-api/app/services/providers/`)
-- [ ] Memory abstraction (SQLite text store, no embeddings) (`services/core-api/app/services/memory/`)
-- [ ] Tool registry contract (`services/core-api/app/services/tools/`)
-- [ ] Chat streaming over `/ws/chat` (echo), messages persisted (`services/core-api/app/ws/chat.py`)
-- [ ] Status heartbeat over `/ws/status`
-- [ ] `LITE_MODE` + `REMOTE_ENABLED` flags + `.env.example` (`services/core-api/app/core/config.py`)
-- [ ] Shared design tokens + UI primitives (`packages/ui/`) + shared types (`packages/types/`)
-- [ ] Repo analysis docs (`docs/repo-analysis/` — separate job)
-- [ ] Integration feature matrix + architecture/UI/plan docs (`docs/`)
-- [ ] README with run instructions for backend + both frontends
+- [x] Monorepo structure (`apps/`, `services/`, `packages/`)
+- [x] Desktop app shell — Tauri + React + TS + Tailwind + shadcn/ui (`apps/desktop/`)
+- [x] All 8 pages render: Chat, Files, Memory, Projects, Research, Tasks, Remote, Settings (`apps/desktop/src/features/*`)
+- [x] Layout shell + sidebar + status bar (`apps/desktop/src/components/layout/`)
+- [x] Presence orb stub (cheap CSS, no WebGL) (`apps/desktop/src/components/`)
+- [x] Remote dashboard shell (`apps/remote-dashboard/`)
+- [x] FastAPI app boots with REST `/api/*` + WS `/ws/*` registered (`services/core-api/`)
+- [x] SQLAlchemy models for all 8 tables + SQLite engine/session (`services/core-api/app/models/*`, `db/*`)
+- [x] Service-layer skeletons: memory, providers, tools, persona, remote, tasks, files (`services/core-api/app/services/*`)
+- [x] Persona system skeleton with `friend`/`operator`/`researcher`/`coder` modes + prompt profiles (`packages/prompts/`)
+- [x] Provider abstraction with lite `echo`/mock default (`services/core-api/app/services/providers/`)
+- [x] Memory abstraction (SQLite text store, no embeddings) (`services/core-api/app/services/memory/`)
+- [x] Tool registry contract (`services/core-api/app/services/tools/`)
+- [x] Chat streaming over `/ws/chat`, messages persisted (`services/core-api/app/ws/chat.py`)
+- [x] Status heartbeat over `/ws/status`
+- [x] `LITE_MODE` + `REMOTE_ENABLED` flags + `.env.example` (`services/core-api/app/core/config.py`)
+- [x] Shared design tokens + UI primitives (`packages/ui/`) + shared types (`packages/types/`)
+- [x] Repo analysis docs (`docs/repo-analysis/` — separate job)
+- [x] Integration feature matrix + architecture/UI/plan docs (`docs/`)
+- [x] README with run instructions for backend + both frontends
 
 ---
 
 ## v0.2 — Integration phase (wire real backends)
 
-Flip the mocks into real behavior, one abstraction at a time.
+Flip the mocks into real behavior, one abstraction at a time. **v1 landed the
+provider + file-ingestion slices and wired both frontends to the backend; the
+remaining items (semantic memory, real remote transport, status fan-out) carry
+forward.**
 
-- [ ] **Real model providers** behind the provider interface — OpenAI, Anthropic, Ollama, local (`services/core-api/app/services/providers/`)
-  - [ ] Lazy-import each provider SDK (only when selected)
-  - [ ] API-key config via `settings` table + `.env`
-  - [ ] Real token streaming through `/ws/chat`
+- [x] **Real model providers** behind the provider interface — OpenAI / OpenAI-compatible (OpenRouter, local) + Gemini (`services/core-api/app/services/providers/`)
+  - [x] Lazy-import each provider SDK (only when selected)
+  - [x] API-key config via `settings` table (`active_provider`) + `.env`
+  - [x] Real token streaming through `/ws/chat` (mock fallback on missing key / mid-call error)
 - [ ] **Memory retrieval** — upgrade from keyword to semantic recall (`services/core-api/app/services/memory/`)
+  - [x] Memory pinning + `?kind=&pinned=&limit=` filtering + conversation summaries (every 10 turns)
   - [ ] Optional embedding provider (lazy, off in lite mode)
   - [ ] Optional vector index (no mandatory vector DB)
   - [ ] `recall()` wired into the chat orchestration loop
 - [ ] **Remote transport** — real device pairing + relay (`services/core-api/app/services/remote/`, `ws/remote.py`)
   - [ ] Pairing secrets / auth tokens on `devices` (extend `models/device.py`)
   - [ ] Live presence over `/ws/remote`; dashboard reaches paired devices
-- [ ] **File ingestion** — parse → chunk → index pipeline (`services/core-api/app/services/files/`)
-  - [ ] Real `/api/files/{id}/ingest` (status `uploaded`→`ingesting`→`ingested`)
-  - [ ] Searchable file content feeding memory/research
+- [x] **File ingestion** — text extraction (text/code/PDF) on upload (`services/core-api/app/services/files/`)
+  - [x] `POST /api/files` extracts text (413 over `MAX_UPLOAD_BYTES`); `GET /api/files/{id}` returns `extracted_text`
+  - [ ] Chunk → index pipeline; searchable content feeding memory/research
 - [ ] **Persona depth** — mode-specific tuned prompts + memory-aware tone (`packages/prompts/`)
 - [ ] **Status bus** — real event fan-out (provider health, task, device) over `/ws/status`
 - [ ] **Presence orb** reactive to real chat/voice state
+- [x] **Frontends wired to the backend** — desktop + remote talk to `core-api` over REST + WS (mock fallback when offline)
+- [x] **Setup docs + dev scripts** — `docs/setup/INSTALLATION.md`, `scripts/env-validate.{sh,ps1}`, `scripts/db-init.{sh,ps1}`
 
 ---
 
@@ -86,24 +92,28 @@ Flip the mocks into real behavior, one abstraction at a time.
 
 ---
 
-## Mocked vs implemented (after tonight)
+## Mocked vs implemented (as of v1)
 
-### Real / implemented after v0.1
-- [x] Monorepo + desktop shell + remote dashboard shell
+### Real / implemented
+- [x] Monorepo + desktop shell + remote dashboard shell, both wired to the backend
 - [x] FastAPI app, REST + WS routes registered
 - [x] SQLite + all 8 tables, CRUD **persistence** (sessions, messages, memories, files, tasks, settings, devices)
 - [x] `GET /api/health`
 - [x] Service-layer interfaces + lite default implementations
 - [x] `LITE_MODE` / `REMOTE_ENABLED` config
+- [x] **Real model providers** — OpenAI / OpenAI-compatible (OpenRouter, local) + Gemini, lazy-imported, with mock fallback
+- [x] **Active-provider selection** persisted in the DB + `PUT /api/providers/active`
+- [x] Real token streaming over `/ws/chat`
+- [x] **File text ingestion** (text/code/PDF) on upload
+- [x] Memory **pinning + filtering + conversation summaries**
+- [x] Setup docs (`docs/setup/INSTALLATION.md`) + dev scripts (`env-validate`, `db-init`)
 
-### Mocked after v0.1 (wired, canned/echo — to be made real in v0.2)
-- [ ] Chat streaming = **echo provider** (no real LLM yet) → v0.2
-- [ ] Providers list = **`echo` only** → v0.2
+### Still mocked / lite (to be made real in v0.2)
 - [ ] Memory search = **keyword/substring** (no embeddings) → v0.2
 - [ ] Persona = **static friend-first prompt** (no mode tuning) → v0.2
 - [ ] Remote = **mock device presence**, no real pairing/transport → v0.2
 - [ ] Status bus = **heartbeat + canned events** → v0.2
 
-### Deferred (interface/TODO only after v0.1)
-- [ ] Real providers · semantic memory · file ingestion · real remote transport → v0.2
+### Deferred (interface/TODO only)
+- [ ] Semantic memory · real remote transport · chunk/index pipeline → v0.2
 - [ ] Computer-use · voice · multi-agent · scheduler · packaging → v0.3

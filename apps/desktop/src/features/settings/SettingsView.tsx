@@ -2,9 +2,12 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Check } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { usePersona, PERSONA_MODES } from "@/state/PersonaStore";
+import { useConnection } from "@/state/ConnectionStore";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import type { ModelInfo } from "@/lib/types";
+import type { ApiProviderInfo, ApiProviderStatus } from "@/lib/types";
+
+const LITE_MODE_KEY = "lite_mode";
 
 function SettingRow({
   title,
@@ -27,25 +30,144 @@ function SettingRow({
 }
 
 export function SettingsView() {
-  const { mode, setMode } = usePersona();
-  const [models, setModels] = useState<ModelInfo[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>("");
+  const { mode, setMode, backendModes, backendMode, setBackendMode, refreshPersona } =
+    usePersona();
+  const { refresh: refreshConnection } = useConnection();
+
+  const [providers, setProviders] = useState<ApiProviderInfo[]>([]);
+  const [statuses, setStatuses] = useState<ApiProviderStatus[]>([]);
   const [theme, setTheme] = useState<"dark" | "midnight">("dark");
+  const [lite, setLite] = useState(false);
+
+  const loadProviders = async () => {
+    const [p, s] = await Promise.all([api.listProviders(), api.providerStatus()]);
+    setProviders(p.data);
+    setStatuses(s.data);
+  };
 
   useEffect(() => {
-    void api.getModels().then((m) => {
-      setModels(m);
-      setSelectedModel((cur) => cur || m[0]?.id || "");
+    void loadProviders();
+    void api.getSetting(LITE_MODE_KEY).then((r) => {
+      if (r.ok && r.data) setLite(r.data.value === "true" || r.data.value === "1");
     });
   }, []);
+
+  const statusFor = (name: string) => statuses.find((s) => s.name === name);
+
+  const chooseProvider = async (name: string) => {
+    const r = await api.setActiveProvider(name);
+    if (r.ok) {
+      await loadProviders();
+      refreshConnection();
+    }
+  };
+
+  const choosePersona = async (next: string) => {
+    await setBackendMode(next);
+    refreshPersona();
+  };
+
+  const toggleLite = async () => {
+    const next = !lite;
+    setLite(next);
+    await api.putSetting(LITE_MODE_KEY, String(next));
+  };
 
   return (
     <PageContainer title="Settings" subtitle="Shape how Miori shows up for you.">
       <div className="space-y-5">
-        {/* Persona mode */}
+        {/* Provider (active model backend) */}
+        <SettingRow
+          title="Model provider"
+          description="The active provider chat uses. Configured providers have a valid key/endpoint."
+        >
+          <div className="space-y-2">
+            {providers.map((p) => {
+              const st = statusFor(p.name);
+              const active = p.active || st?.active;
+              const configured = p.configured || st?.configured;
+              return (
+                <button
+                  key={p.name}
+                  onClick={() => void chooseProvider(p.name)}
+                  className={cn(
+                    "flex w-full items-center justify-between rounded px-4 py-2.5 text-left transition-colors",
+                    active
+                      ? "border border-accent/40 bg-accent/10"
+                      : "border border-white/[0.06] hover:bg-white/[0.04]",
+                  )}
+                >
+                  <span>
+                    <span className="block text-sm capitalize text-ink">{p.name}</span>
+                    <span className="block text-xs text-ink-faint">
+                      {configured ? "configured" : "not configured"}
+                      {p.models.length > 0 && ` · ${p.models.length} models`}
+                      {active ? " · active" : ""}
+                    </span>
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span
+                      className={cn(
+                        "h-1.5 w-1.5 rounded-full",
+                        configured ? "bg-positive" : "bg-ink-faint",
+                      )}
+                    />
+                    {active && <Check size={16} className="text-accent" />}
+                  </span>
+                </button>
+              );
+            })}
+            {providers.length === 0 && (
+              <p className="text-xs text-ink-faint">
+                No providers reported — backend unreachable.
+              </p>
+            )}
+          </div>
+        </SettingRow>
+
+        {/* Persona mode (backend) */}
         <SettingRow
           title="Persona mode"
-          description="How warm vs. focused Miori feels in conversation."
+          description="The relationship mode the backend uses for replies."
+        >
+          {backendModes.length > 0 ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {backendModes.map((m) => (
+                <button
+                  key={m}
+                  onClick={() => void choosePersona(m)}
+                  className={cn(
+                    "flex items-center gap-3 rounded p-3 text-left capitalize transition-colors",
+                    backendMode === m
+                      ? "border border-accent/40 bg-accent/10"
+                      : "border border-white/[0.06] hover:bg-white/[0.04]",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "grid h-4 w-4 place-items-center rounded-full border",
+                      backendMode === m
+                        ? "border-accent bg-accent text-canvas"
+                        : "border-white/20",
+                    )}
+                  >
+                    {backendMode === m && <Check size={11} />}
+                  </span>
+                  <span className="text-sm text-ink">{m}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-ink-faint">
+              Persona modes unavailable — backend unreachable.
+            </p>
+          )}
+        </SettingRow>
+
+        {/* Local UI mood preset (orb / badge feel) */}
+        <SettingRow
+          title="Interface mood"
+          description="How warm vs. focused the interface feels (local only)."
         >
           <div className="grid gap-2 sm:grid-cols-2">
             {PERSONA_MODES.map((p) => (
@@ -76,37 +198,36 @@ export function SettingsView() {
           </div>
         </SettingRow>
 
-        {/* Model select */}
+        {/* Lite mode (persisted via PUT /settings) */}
         <SettingRow
-          title="Model"
-          description="Local models keep everything on-device; remote models are more capable."
+          title="Lite mode"
+          description="Trim heavy features for low-power devices. Persisted to the backend."
         >
-          <div className="space-y-2">
-            {models.map((m) => (
-              <button
-                key={m.id}
-                onClick={() => setSelectedModel(m.id)}
+          <button
+            onClick={() => void toggleLite()}
+            className={cn(
+              "flex w-full items-center justify-between rounded px-4 py-3 text-left transition-colors",
+              lite ? "border border-accent/40 bg-accent/10" : "border border-white/[0.06]",
+            )}
+          >
+            <span className="text-sm text-ink">{lite ? "Lite mode on" : "Lite mode off"}</span>
+            <span
+              className={cn(
+                "relative h-5 w-9 rounded-full transition-colors",
+                lite ? "bg-accent" : "bg-white/15",
+              )}
+            >
+              <span
                 className={cn(
-                  "flex w-full items-center justify-between rounded px-4 py-2.5 text-left transition-colors",
-                  selectedModel === m.id
-                    ? "border border-accent/40 bg-accent/10"
-                    : "border border-white/[0.06] hover:bg-white/[0.04]",
+                  "absolute top-0.5 h-4 w-4 rounded-full bg-canvas transition-all",
+                  lite ? "left-[1.125rem]" : "left-0.5",
                 )}
-              >
-                <span>
-                  <span className="block text-sm text-ink">{m.label}</span>
-                  <span className="block text-xs text-ink-faint">
-                    {m.provider} · {(m.contextTokens / 1000).toFixed(0)}k ctx
-                    {m.local ? " · local" : ""}
-                  </span>
-                </span>
-                {selectedModel === m.id && <Check size={16} className="text-accent" />}
-              </button>
-            ))}
-          </div>
+              />
+            </span>
+          </button>
         </SettingRow>
 
-        {/* Theme */}
+        {/* Theme (local) */}
         <SettingRow title="Theme" description="Miori is dark by design. Pick your shade of night.">
           <div className="flex gap-2">
             {(["dark", "midnight"] as const).map((t) => (

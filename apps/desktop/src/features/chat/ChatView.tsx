@@ -2,8 +2,11 @@ import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Avatar } from "@/components/ui/Avatar";
 import { ScrollArea } from "@/components/ui/ScrollArea";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Composer } from "@/components/layout/Composer";
 import { useChat } from "@/state/ChatStore";
+import { useConnection } from "@/state/ConnectionStore";
+import { usePersona } from "@/state/PersonaStore";
 import { cn } from "@/lib/cn";
 import type { ChatMessage } from "@/lib/types";
 
@@ -50,14 +53,31 @@ function Bubble({ message }: { message: ChatMessage }) {
 
 export function ChatView() {
   const { messages, send } = useChat();
+  const { activeProvider, status } = useConnection();
+  const { descriptor, backendMode } = usePersona();
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const personaLabel = backendMode ?? descriptor.label;
+
   return (
     <div className="mx-auto flex h-full max-w-3xl flex-col px-6">
+      {/* Live persona + active provider indicators (graceful when offline). */}
+      <div className="flex items-center justify-center gap-2 pt-4">
+        <StatusBadge label={`Persona · ${personaLabel}`} tone="accent" />
+        <StatusBadge
+          label={
+            status === "connected" && activeProvider
+              ? `Provider · ${activeProvider}`
+              : "Provider · mock"
+          }
+          tone={status === "connected" && activeProvider ? "positive" : "muted"}
+        />
+      </div>
+
       <ScrollArea className="flex-1 py-6">
         <div className="space-y-5">
           {messages.map((m) => (

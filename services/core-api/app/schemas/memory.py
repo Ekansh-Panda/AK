@@ -12,6 +12,14 @@ class MemoryCreate(BaseModel):
     namespace: str = "default"
     user_id: str | None = None
     meta: str | None = None
+    pinned: bool = False
+
+
+class MemoryUpdate(BaseModel):
+    """Partial update — toggle pinned and/or edit content."""
+
+    content: str | None = Field(None, min_length=1)
+    pinned: bool | None = None
 
 
 class MemoryOut(TimestampedORMModel):
@@ -19,6 +27,7 @@ class MemoryOut(TimestampedORMModel):
     namespace: str
     content: str
     meta: str | None = None
+    pinned: bool = False
 
 
 class MemorySearchRequest(BaseModel):

@@ -1,10 +1,9 @@
-"""FileIngestionService — store uploaded files and track metadata.
+"""FileIngestionService — store uploaded files, extract text, track metadata.
 
-Files are written under ``settings.UPLOAD_DIR``. Ingestion (parsing/embedding)
-is deferred.
-
-TODO(Khoj/Odysseus): add a background ingestion pipeline that parses content
-and indexes it into the memory/vector store after upload.
+Files are written under ``settings.UPLOAD_DIR``. On upload we best-effort
+extract text for common text/code formats and PDFs (pypdf, lazy-imported). PDF
+extraction degrades gracefully when pypdf is absent (lite-mode) — we store a
+note and keep the upload.
 """
 
 from __future__ import annotations
@@ -21,6 +20,40 @@ from app.models.file import FileRecord
 
 logger = get_logger(__name__)
 
+# Extensions decoded directly as UTF-8 text (errors='replace').
+TEXT_EXTENSIONS = {
+    ".txt",
+    ".md",
+    ".markdown",
+    ".json",
+    ".csv",
+    ".log",
+    # common code
+    ".py",
+    ".js",
+    ".ts",
+    ".tsx",
+    ".jsx",
+    ".html",
+    ".css",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".sh",
+    ".rs",
+    ".go",
+    ".java",
+}
+
+
+class UploadTooLargeError(Exception):
+    """Raised when an upload exceeds ``settings.MAX_UPLOAD_BYTES``."""
+
+    def __init__(self, size: int, limit: int) -> None:
+        self.size = size
+        self.limit = limit
+        super().__init__(f"upload of {size} bytes exceeds limit of {limit} bytes")
+
 
 class FileIngestionService:
     def __init__(self, db: Session) -> None:
@@ -28,6 +61,36 @@ class FileIngestionService:
         self._upload_dir = Path(settings.UPLOAD_DIR)
         self._upload_dir.mkdir(parents=True, exist_ok=True)
 
+    # --- extraction ---
+    @staticmethod
+    def _extract_text(filename: str, data: bytes) -> tuple[str | None, str]:
+        """Return (extracted_text, status). status is "ingested" or "uploaded"."""
+        ext = Path(filename).suffix.lower()
+        if ext in TEXT_EXTENSIONS:
+            return data.decode("utf-8", errors="replace"), "ingested"
+        if ext == ".pdf":
+            return FileIngestionService._extract_pdf(data)
+        # Unknown/binary: keep as-is, no text.
+        return None, "uploaded"
+
+    @staticmethod
+    def _extract_pdf(data: bytes) -> tuple[str | None, str]:
+        try:
+            import io
+
+            import pypdf  # lazy / optional
+        except ImportError:
+            logger.info("pypdf not installed; storing PDF without text extraction")
+            return "[pdf text extraction unavailable: pypdf not installed]", "uploaded"
+        try:
+            reader = pypdf.PdfReader(io.BytesIO(data))
+            text = "\n".join((page.extract_text() or "") for page in reader.pages)
+            return text.strip() or None, "ingested"
+        except Exception as exc:  # noqa: BLE001 - never crash on bad PDFs
+            logger.warning("PDF extraction failed: %s", exc)
+            return f"[pdf text extraction failed: {exc}]", "failed"
+
+    # --- ingestion ---
     def register_upload(
         self,
         filename: str,
@@ -36,25 +99,35 @@ class FileIngestionService:
         content_type: str | None = None,
         user_id: str | None = None,
     ) -> FileRecord:
-        """Persist bytes to disk and record metadata."""
+        """Persist bytes to disk, extract text, and record metadata.
+
+        Raises ``UploadTooLargeError`` if the payload exceeds the configured max.
+        """
+        if len(data) > settings.MAX_UPLOAD_BYTES:
+            raise UploadTooLargeError(len(data), settings.MAX_UPLOAD_BYTES)
+
         safe_name = Path(filename).name or "upload.bin"
         stored_name = f"{uuid.uuid4()}_{safe_name}"
         path = self._upload_dir / stored_name
         path.write_bytes(data)
+
+        extracted, status = self._extract_text(safe_name, data)
 
         record = FileRecord(
             filename=safe_name,
             content_type=content_type,
             size_bytes=len(data),
             storage_path=str(path),
-            status="uploaded",
+            status=status,
             user_id=user_id,
+            extracted_text=extracted,
         )
         self._db.add(record)
         self._db.commit()
         self._db.refresh(record)
-        logger.info("Registered upload %s (%d bytes)", safe_name, len(data))
-        # TODO: enqueue ingestion job here.
+        logger.info(
+            "Registered upload %s (%d bytes, status=%s)", safe_name, len(data), status
+        )
         return record
 
     def list(self) -> list[FileRecord]:

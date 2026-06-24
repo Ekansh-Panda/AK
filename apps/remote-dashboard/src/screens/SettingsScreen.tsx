@@ -5,6 +5,7 @@ import { cn } from "@/lib/cn";
 import { Button } from "@/components/Button";
 import { GlassCard } from "@/components/GlassCard";
 import { ScreenHeader } from "@/components/ScreenHeader";
+import { StatusDot } from "@/components/StatusDot";
 import { useConnection } from "@/state/connection";
 
 /** Minimal settings: host, token, theme + disconnect. */
@@ -20,6 +21,10 @@ export function SettingsScreen() {
     connect,
     disconnect,
     version,
+    status,
+    isConnected,
+    isMock,
+    remoteEnabled,
   } = useConnection();
 
   const [localHost, setLocalHost] = useState(host);
@@ -47,6 +52,40 @@ export function SettingsScreen() {
         {/* Connection */}
         <GlassCard className="mb-3 flex flex-col gap-4">
           <h2 className="text-sm font-semibold text-ink-soft">Connection</h2>
+
+          {/* Live connection state */}
+          <div className="flex items-center gap-2.5 rounded-xl bg-white/[0.03] px-3 py-2.5">
+            <StatusDot
+              tone={
+                !isConnected
+                  ? "idle"
+                  : isMock
+                    ? "warn"
+                    : status === "error"
+                      ? "danger"
+                      : "positive"
+              }
+              pulse={isConnected && !isMock}
+            />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">
+                {!isConnected
+                  ? "Not connected"
+                  : isMock
+                    ? "Offline demo (mock)"
+                    : "Live — connected to host"}
+              </p>
+              <p className="truncate text-xs text-ink-faint">
+                {isConnected && !isMock
+                  ? remoteEnabled
+                    ? "Remote control enabled"
+                    : "Remote control off (set REMOTE_ENABLED=true)"
+                  : isMock
+                    ? "Host unreachable — using simulated data"
+                    : "Enter a host and connect"}
+              </p>
+            </div>
+          </div>
 
           <label className="flex flex-col gap-1.5">
             <span className="flex items-center gap-1.5 text-xs text-ink-faint">

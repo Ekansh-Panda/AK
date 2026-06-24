@@ -1,34 +1,46 @@
-"""Provider listing endpoints."""
+"""Provider listing, status and active-provider selection endpoints."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
-from app.schemas.provider import ModelInfo, ProviderInfo
+from app.db.session import get_db
+from app.schemas.provider import (
+    ActiveProviderOut,
+    ModelInfo,
+    ProviderInfo,
+    ProviderStatus,
+    SetActiveProvider,
+)
 from app.services.providers.registry import registry
 
 router = APIRouter(prefix="/providers", tags=["providers"])
 
 
+def _models(provider) -> list[ModelInfo]:
+    return [
+        ModelInfo(
+            id=m.id, name=m.name, provider=m.provider, context_window=m.context_window
+        )
+        for m in provider.list_models()
+    ]
+
+
 @router.get("", response_model=list[ProviderInfo])
 def list_providers() -> list[ProviderInfo]:
+    active = registry.active_name
     out: list[ProviderInfo] = []
     for provider in registry.list():
-        models = [
-            ModelInfo(
-                id=m.id,
-                name=m.name,
-                provider=m.provider,
-                context_window=m.context_window,
-            )
-            for m in provider.list_models()
-        ]
+        avail = provider.available()
         out.append(
             ProviderInfo(
                 name=provider.name,
                 description=f"{provider.name} model provider",
-                available=True,
-                models=models,
+                available=avail,
+                configured=avail,
+                active=provider.name == active,
+                models=_models(provider),
             )
         )
     return out
@@ -36,15 +48,29 @@ def list_providers() -> list[ProviderInfo]:
 
 @router.get("/models", response_model=list[ModelInfo])
 def list_models() -> list[ModelInfo]:
-    models: list[ModelInfo] = []
-    for provider in registry.list():
-        for m in provider.list_models():
-            models.append(
-                ModelInfo(
-                    id=m.id,
-                    name=m.name,
-                    provider=m.provider,
-                    context_window=m.context_window,
-                )
-            )
-    return models
+    """Models for the *active* provider (the one chat will use)."""
+    return _models(registry.get())
+
+
+@router.get("/status", response_model=list[ProviderStatus])
+def provider_status() -> list[ProviderStatus]:
+    active = registry.active_name
+    return [
+        ProviderStatus(
+            name=a.name,
+            configured=a.configured,
+            available=a.available,
+            active=a.name == active,
+        )
+        for a in registry.availability()
+    ]
+
+
+@router.put("/active", response_model=ActiveProviderOut)
+def set_active_provider(
+    body: SetActiveProvider, db: Session = Depends(get_db)
+) -> ActiveProviderOut:
+    if not registry.has(body.name):
+        raise HTTPException(status_code=404, detail=f"unknown provider '{body.name}'")
+    name = registry.persist_active(db, body.name)
+    return ActiveProviderOut(active=name)

@@ -38,7 +38,37 @@ def init_db() -> None:
     import app.models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    _ensure_columns()
     logger.info("Database initialized at %s", settings.DATABASE_URL)
+
+
+# Tiny additive "migration": SQLAlchemy create_all never ALTERs existing tables,
+# so newly-added columns are backfilled here for already-created SQLite DBs.
+# Each entry: (table, column, column DDL type + default).
+_ADDED_COLUMNS: list[tuple[str, str, str]] = [
+    ("files", "extracted_text", "TEXT"),
+    ("memories", "pinned", "BOOLEAN DEFAULT 0"),
+]
+
+
+def _ensure_columns() -> None:
+    from sqlalchemy import inspect, text
+
+    try:
+        inspector = inspect(engine)
+        existing_tables = set(inspector.get_table_names())
+        with engine.begin() as conn:
+            for table, column, ddl in _ADDED_COLUMNS:
+                if table not in existing_tables:
+                    continue
+                cols = {c["name"] for c in inspector.get_columns(table)}
+                if column not in cols:
+                    conn.execute(
+                        text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+                    )
+                    logger.info("Added column %s.%s", table, column)
+    except Exception as exc:  # noqa: BLE001 - best-effort, never block boot
+        logger.warning("Column backfill skipped: %s", exc)
 
 
 def get_db() -> Generator[Session, None, None]:

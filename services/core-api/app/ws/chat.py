@@ -1,9 +1,13 @@
-"""/ws/chat — token-by-token streaming chat over the mock provider.
+"""/ws/chat — token-by-token streaming chat over the ACTIVE model provider.
+
+Streams via the active provider's ``stream()`` (mock fallback on missing key or
+provider error). Frame protocol is stable for the desktop client.
 
 Client sends JSON: {"message": "...", "session_id": "...?", "persona_mode": "...?"}
 Server streams JSON frames:
   {"type": "session", "session_id": "..."}
   {"type": "token", "token": "..."}
+  {"type": "error", "detail": "..."}
   {"type": "done", "session_id": "..."}
 """
 
@@ -51,6 +55,8 @@ async def ws_chat(websocket: WebSocket) -> None:
                         )
                     elif kind == "token":
                         await websocket.send_json({"type": "token", "token": value})
+                    elif kind == "error":
+                        await websocket.send_json({"type": "error", "detail": value})
                     elif kind == "done":
                         await websocket.send_json(
                             {"type": "done", "session_id": value}

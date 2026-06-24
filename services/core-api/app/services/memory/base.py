@@ -24,6 +24,7 @@ class MemoryItem:
     content: str
     user_id: str | None = None
     meta: str | None = None
+    pinned: bool = False
     score: float = 0.0
 
 
@@ -40,6 +41,7 @@ class MemoryProvider(ABC):
         namespace: str = "default",
         user_id: str | None = None,
         meta: str | None = None,
+        pinned: bool = False,
     ) -> MemoryItem:
         """Store a memory and return it."""
 
@@ -50,12 +52,28 @@ class MemoryProvider(ABC):
         """Return memories relevant to ``query`` (best-effort)."""
 
     @abstractmethod
-    def list(self, *, limit: int = 50) -> list[MemoryItem]:
-        """Return the most recent memories (best-effort recency order)."""
+    def list(
+        self,
+        *,
+        kind: str | None = None,
+        pinned: bool | None = None,
+        limit: int = 50,
+    ) -> list[MemoryItem]:
+        """Return recent memories, optionally filtered by kind/pinned."""
 
     @abstractmethod
     def get(self, memory_id: str) -> MemoryItem | None:
         """Fetch a memory by id."""
+
+    @abstractmethod
+    def update(
+        self,
+        memory_id: str,
+        *,
+        content: str | None = None,
+        pinned: bool | None = None,
+    ) -> MemoryItem | None:
+        """Edit content and/or toggle pinned; return the updated item."""
 
     @abstractmethod
     def delete(self, memory_id: str) -> bool:
