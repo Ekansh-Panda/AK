@@ -1,0 +1,12 @@
+# Miori Core API — runtime dependencies (Python 3.11+)
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+SQLAlchemy==2.0.36
+python-multipart==0.0.20
+websockets==14.1
+
+# TODO(Odysseus/Khoj): optional heavy deps (embeddings, vector stores, real
+# model SDKs, APScheduler) live behind LITE_MODE and are NOT installed by
+# default to keep low-end machines usable.
