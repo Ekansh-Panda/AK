@@ -29,3 +29,6 @@ class Memory(UUIDMixin, TimestampMixin, Base):
     meta: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Pinned memories are surfaced first and protected from auto-pruning.
     pinned: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    # Optional embedding (JSON array of floats) used by the semantic memory
+    # provider when LITE_MODE is off. NULL in lite mode.
+    embedding: Mapped[str | None] = mapped_column(Text, nullable=True)

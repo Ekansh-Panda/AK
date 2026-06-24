@@ -48,6 +48,7 @@ def init_db() -> None:
 _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("files", "extracted_text", "TEXT"),
     ("memories", "pinned", "BOOLEAN DEFAULT 0"),
+    ("memories", "embedding", "TEXT"),
 ]
 
 
