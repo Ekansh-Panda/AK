@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     # providers) lazy/disabled so Miori stays usable on low-end machines.
     LITE_MODE: bool = True
 
+    # Semantic memory model (used only when LITE_MODE is off). Small + CPU-friendly.
+    EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
+
     # --- Paths ---
     # Location of shared prompt profiles in the monorepo. Persona service degrades
     # gracefully if this path is missing.

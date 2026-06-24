@@ -124,7 +124,9 @@ class ChatService:
         self._persist(session.id, "user", user_text)
         provider = self._providers.get()
         msgs = self._build_provider_messages(session.id)
-        system_prompt = self._persona.build_prompt(mode)
+        system_prompt = self._persona.build_prompt(
+            mode, context=self._recall_context(user_text, user_id)
+        )
         try:
             reply_text = await provider.chat(
                 msgs, model=model, system_prompt=system_prompt
@@ -134,6 +136,7 @@ class ChatService:
             provider = self._providers.get("mock")
             reply_text = await provider.chat(msgs, system_prompt=system_prompt)
         reply = self._persist(session.id, "assistant", reply_text, model=provider.name)
+        self._store_facts(user_text, user_id)
         await self._maybe_summarize(session.id)
         return session, reply
 
@@ -160,7 +163,9 @@ class ChatService:
 
         provider = self._providers.get()
         msgs = self._build_provider_messages(session.id)
-        system_prompt = self._persona.build_prompt(mode)
+        system_prompt = self._persona.build_prompt(
+            mode, context=self._recall_context(user_text, user_id)
+        )
         chunks: list[str] = []
         try:
             async for chunk in provider.stream(
@@ -184,8 +189,69 @@ class ChatService:
         self._persist(
             session.id, "assistant", "".join(chunks).strip(), model=provider.name
         )
+        self._store_facts(user_text, user_id)
         await self._maybe_summarize(session.id)
         yield ("done", session.id)
+
+    # --- memory recall + fact capture (Phase 2.2) ---
+    def _recall_context(self, user_text: str, user_id: str | None) -> str | None:
+        """Build a 'Relevant context' block from recalled facts + summaries.
+
+        Best-effort: returns None on any error or when nothing is found, so chat
+        never breaks because of memory.
+        """
+        try:
+            from app.services.memory.service import MemoryService
+
+            mem = MemoryService(self._db)
+            facts = mem.search(user_text, namespace="user:facts", limit=5)
+            summaries = mem.list(kind="summary", limit=3)
+            lines = [f"- {m.content}" for m in facts]
+            lines += [f"- (earlier) {m.content}" for m in summaries]
+            if not lines:
+                return None
+            return "Relevant context (use it only if helpful):\n" + "\n".join(lines)
+        except Exception as exc:  # noqa: BLE001 - non-blocking
+            logger.debug("recall skipped: %s", exc)
+            return None
+
+    @staticmethod
+    def _extract_facts(text: str) -> list[str]:
+        """Cheap heuristic fact extraction from a user turn (max 3)."""
+        import re
+
+        patterns = [
+            (r"\bmy name is ([A-Z][\w'\-]{1,40})", "User's name is {0}."),
+            (r"\bi(?:'m| am) (?:a |an )?([\w '\-]{3,50})", "User is {0}."),
+            (r"\bi (?:like|love|enjoy) ([\w '\-]{3,50})", "User likes {0}."),
+            (r"\bi (?:prefer) ([\w '\-]{3,50})", "User prefers {0}."),
+            (r"\bi (?:hate|dislike) ([\w '\-]{3,50})", "User dislikes {0}."),
+            (r"\bi (?:live|work) (?:in|at) ([\w '\-]{3,50})", "User is at {0}."),
+        ]
+        facts: list[str] = []
+        for pat, tmpl in patterns:
+            m = re.search(pat, text, flags=re.IGNORECASE)
+            if m:
+                facts.append(tmpl.format(m.group(1).strip().rstrip(".")))
+            if len(facts) >= 3:
+                break
+        return facts
+
+    def _store_facts(self, user_text: str, user_id: str | None) -> None:
+        """Persist extracted facts under namespace 'user:facts' (deduped)."""
+        try:
+            facts = self._extract_facts(user_text)
+            if not facts:
+                return
+            from app.services.memory.service import MemoryService
+
+            mem = MemoryService(self._db)
+            existing = {m.content for m in mem.list(kind="user:facts", limit=200)}
+            for fact in facts:
+                if fact not in existing:
+                    mem.add(fact, namespace="user:facts", user_id=user_id)
+        except Exception as exc:  # noqa: BLE001 - non-blocking
+            logger.debug("fact capture skipped: %s", exc)
 
     # --- summarization hook ---
     async def _maybe_summarize(self, session_id: str) -> None:

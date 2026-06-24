@@ -24,3 +24,7 @@ pytest==8.3.4
 # Optional provider SDKs (lazy-imported; install only if you use these providers)
 huggingface_hub>=0.24
 cohere>=5.11
+
+# Optional semantic-memory deps (LITE_MODE off; lazy-imported)
+sentence-transformers>=2.7
+numpy>=1.26
