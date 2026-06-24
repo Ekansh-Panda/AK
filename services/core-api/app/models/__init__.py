@@ -1,0 +1,21 @@
+"""Import all models so SQLAlchemy metadata is fully populated."""
+
+from app.models.device import Device
+from app.models.file import FileRecord
+from app.models.memory import Memory
+from app.models.message import Message
+from app.models.session import ChatSession
+from app.models.setting import Setting
+from app.models.task import Task
+from app.models.user import User
+
+__all__ = [
+    "ChatSession",
+    "Device",
+    "FileRecord",
+    "Memory",
+    "Message",
+    "Setting",
+    "Task",
+    "User",
+]
