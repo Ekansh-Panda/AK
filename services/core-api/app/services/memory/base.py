@@ -34,7 +34,7 @@ class MemoryProvider(ABC):
     name: str = "base"
 
     @abstractmethod
-    def add(
+    async def add(
         self,
         content: str,
         *,
@@ -46,7 +46,7 @@ class MemoryProvider(ABC):
         """Store a memory and return it."""
 
     @abstractmethod
-    def search(
+    async def search(
         self, query: str, *, namespace: str = "default", limit: int = 10
     ) -> list[MemoryItem]:
         """Return memories relevant to ``query`` (best-effort)."""

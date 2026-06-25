@@ -34,7 +34,7 @@ class SqliteMemoryProvider(MemoryProvider):
     def __init__(self, db: Session) -> None:
         self._db = db
 
-    def add(
+    async def add(
         self,
         content: str,
         *,
@@ -55,7 +55,7 @@ class SqliteMemoryProvider(MemoryProvider):
         self._db.refresh(row)
         return _to_item(row)
 
-    def search(
+    async def search(
         self, query: str, *, namespace: str = "default", limit: int = 10
     ) -> list[MemoryItem]:
         stmt = (

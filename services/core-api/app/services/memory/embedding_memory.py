@@ -1,21 +1,12 @@
-"""Semantic memory provider (sentence-transformers + cosine similarity).
+"""Semantic memory provider (cosine similarity).
 
-Used when LITE_MODE is off. Embeddings are computed with all-MiniLM-L6-v2 and
-stored as a JSON float array on ``memories.embedding``; search embeds the query
-and ranks candidates by cosine similarity in pure Python (numpy).
-
-Both ``sentence-transformers`` and ``numpy`` are imported lazily. The model is
-loaded once at construction so MemoryService._select_provider's guard can catch
-a missing dependency and fall back to the SQLite-lite provider — Miori never
-breaks on a low-end box.
-
-Inherits list/get/update/delete from SqliteMemoryProvider; only add/search change.
+Used when LITE_MODE is off AND SEMANTIC_MEMORY_ENABLED is true. Embeddings are computed
+via the active model provider (falling back to substring match if embeddings are unsupported).
 """
 
 from __future__ import annotations
 
 import json
-from functools import lru_cache
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -28,33 +19,29 @@ from app.services.memory.sqlite_memory import SqliteMemoryProvider, _to_item
 
 logger = get_logger(__name__)
 
-
-@lru_cache(maxsize=2)
-def _load_model(model_name: str):
-    """Load (and cache) the sentence-transformers model. Raises if missing."""
-    from sentence_transformers import SentenceTransformer  # lazy, heavy
-
-    logger.info("Loading embedding model %s", model_name)
-    return SentenceTransformer(model_name)
-
-
 class EmbeddingMemoryProvider(SqliteMemoryProvider):
     name = "embedding"
 
     def __init__(self, db: Session) -> None:
         super().__init__(db)
-        self._model_name = settings.EMBEDDING_MODEL
-        # Eagerly load so a missing dependency surfaces here (caught by the
-        # provider selector, which then falls back to sqlite-lite).
-        self._model = _load_model(self._model_name)
 
     # --- embedding helpers ---
-    def _embed_one(self, text: str) -> list[float]:
-        vec = self._model.encode([text], normalize_embeddings=True)[0]
-        return [float(x) for x in vec]
+    async def _embed_one(self, text: str) -> list[float] | None:
+        from app.services.providers.registry import registry
+        provider = registry.get()
+        if provider.available():
+            try:
+                embeddings = await provider.embed([text])
+                if embeddings and len(embeddings) > 0:
+                    return embeddings[0]
+            except NotImplementedError:
+                logger.debug("Provider %s does not support embeddings", provider.name)
+            except Exception as exc:
+                logger.warning("Provider embed failed: %s", exc)
+        return None
 
     # --- writes ---
-    def add(
+    async def add(
         self,
         content: str,
         *,
@@ -64,10 +51,10 @@ class EmbeddingMemoryProvider(SqliteMemoryProvider):
         pinned: bool = False,
     ) -> MemoryItem:
         embedding = None
-        try:
-            embedding = json.dumps(self._embed_one(content))
-        except Exception as exc:  # noqa: BLE001 - never block a write on embed
-            logger.warning("embed on add failed: %s", exc)
+        vec = await self._embed_one(content)
+        if vec is not None:
+            embedding = json.dumps(vec)
+        
         row = Memory(
             content=content,
             namespace=namespace,
@@ -82,7 +69,7 @@ class EmbeddingMemoryProvider(SqliteMemoryProvider):
         return _to_item(row)
 
     # --- semantic search ---
-    def search(
+    async def search(
         self, query: str, *, namespace: str = "default", limit: int = 10
     ) -> list[MemoryItem]:
         import numpy as np  # lazy
@@ -95,11 +82,15 @@ class EmbeddingMemoryProvider(SqliteMemoryProvider):
         if not rows:
             return []
 
+        vec = await self._embed_one(query)
+        if vec is None:
+            return await super().search(query, namespace=namespace, limit=limit)
+
         try:
-            q = np.asarray(self._embed_one(query), dtype="float32")
+            q = np.asarray(vec, dtype="float32")
         except Exception as exc:  # noqa: BLE001 - degrade to substring
-            logger.warning("query embed failed (%s); substring fallback", exc)
-            return super().search(query, namespace=namespace, limit=limit)
+            logger.warning("query embed array cast failed (%s); substring fallback", exc)
+            return await super().search(query, namespace=namespace, limit=limit)
 
         scored: list[tuple[float, Memory]] = []
         for r in rows:
@@ -116,7 +107,7 @@ class EmbeddingMemoryProvider(SqliteMemoryProvider):
 
         if not scored:
             # Nothing embedded yet (e.g. pre-existing lite rows) — substring.
-            return super().search(query, namespace=namespace, limit=limit)
+            return await super().search(query, namespace=namespace, limit=limit)
 
         scored.sort(key=lambda t: t[0], reverse=True)
         return [_to_item(r, score=s) for s, r in scored[:limit]]

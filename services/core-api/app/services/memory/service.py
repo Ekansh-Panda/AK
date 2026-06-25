@@ -34,13 +34,14 @@ class MemoryService:
         from app.services.settings_service import LITE_MODE_KEY
 
         lite = get_effective_bool(db, LITE_MODE_KEY, settings.LITE_MODE)
-        if lite:
+        semantic_enabled = get_effective_bool(db, "semantic_memory_enabled", settings.SEMANTIC_MEMORY_ENABLED)
+
+        if lite or not semantic_enabled:
             return SqliteMemoryProvider(db)
-        # Heavy path: semantic embedding memory. Falls back to sqlite-lite if
-        # sentence-transformers isn't installed, so it never breaks low-end boxes.
+        
+        # Heavy path: semantic embedding memory.
         try:
             from app.services.memory.embedding_memory import EmbeddingMemoryProvider
-
             return EmbeddingMemoryProvider(db)
         except Exception as exc:  # noqa: BLE001 - optional heavy dep absent
             logger.info("Embedding memory unavailable (%s); using sqlite-lite", exc)
@@ -50,7 +51,7 @@ class MemoryService:
     def provider_name(self) -> str:
         return self._provider.name
 
-    def add(
+    async def add(
         self,
         content: str,
         *,
@@ -59,14 +60,14 @@ class MemoryService:
         meta: str | None = None,
         pinned: bool = False,
     ) -> MemoryItem:
-        return self._provider.add(
+        return await self._provider.add(
             content, namespace=namespace, user_id=user_id, meta=meta, pinned=pinned
         )
 
-    def search(
+    async def search(
         self, query: str, *, namespace: str = "default", limit: int = 10
     ) -> list[MemoryItem]:
-        return self._provider.search(query, namespace=namespace, limit=limit)
+        return await self._provider.search(query, namespace=namespace, limit=limit)
 
     def list(
         self,
@@ -116,7 +117,7 @@ class MemoryService:
 
         summary = await self._compose_summary(rows)
         meta = json.dumps({"session_id": session_id})
-        return self.add(summary, namespace=SUMMARY_KIND, meta=meta)
+        return await self.add(summary, namespace=SUMMARY_KIND, meta=meta)
 
     async def _compose_summary(self, rows: list) -> str:
         user_lines = [r.content for r in rows if r.role == "user"]

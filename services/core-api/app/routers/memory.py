@@ -21,9 +21,9 @@ router = APIRouter(prefix="/memory", tags=["memory"])
 
 
 @router.post("", response_model=MemoryOut)
-def add_memory(body: MemoryCreate, db: Session = Depends(get_db)) -> MemoryOut:
+async def add_memory(body: MemoryCreate, db: Session = Depends(get_db)) -> MemoryOut:
     service = MemoryService(db)
-    item = service.add(
+    item = await service.add(
         body.content,
         namespace=body.namespace,
         user_id=body.user_id,
@@ -51,12 +51,12 @@ def list_memory(
 
 
 @router.post("/search", response_model=list[MemorySearchResult])
-def search_memory(
+async def search_memory(
     body: MemorySearchRequest, db: Session = Depends(get_db)
 ) -> list[MemorySearchResult]:
     service = MemoryService(db)
     results: list[MemorySearchResult] = []
-    for item in service.search(body.query, namespace=body.namespace, limit=body.limit):
+    for item in await service.search(body.query, namespace=body.namespace, limit=body.limit):
         row = db.get(Memory, item.id)
         if row:
             results.append(

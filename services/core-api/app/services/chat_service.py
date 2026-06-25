@@ -125,7 +125,7 @@ class ChatService:
         provider = self._providers.get()
         msgs = self._build_provider_messages(session.id)
         system_prompt = self._persona.build_prompt(
-            mode, context=self._recall_context(user_text, user_id)
+            mode, context=await self._recall_context(user_text, user_id)
         )
         try:
             reply_text = await provider.chat(
@@ -136,7 +136,7 @@ class ChatService:
             provider = self._providers.get("mock")
             reply_text = await provider.chat(msgs, system_prompt=system_prompt)
         reply = self._persist(session.id, "assistant", reply_text, model=provider.name)
-        self._store_facts(user_text, user_id)
+        await self._store_facts(user_text, user_id)
         await self._maybe_summarize(session.id)
         return session, reply
 
@@ -164,7 +164,7 @@ class ChatService:
         provider = self._providers.get()
         msgs = self._build_provider_messages(session.id)
         system_prompt = self._persona.build_prompt(
-            mode, context=self._recall_context(user_text, user_id)
+            mode, context=await self._recall_context(user_text, user_id)
         )
         chunks: list[str] = []
         try:
@@ -189,12 +189,12 @@ class ChatService:
         self._persist(
             session.id, "assistant", "".join(chunks).strip(), model=provider.name
         )
-        self._store_facts(user_text, user_id)
+        await self._store_facts(user_text, user_id)
         await self._maybe_summarize(session.id)
         yield ("done", session.id)
 
     # --- memory recall + fact capture (Phase 2.2) ---
-    def _recall_context(self, user_text: str, user_id: str | None) -> str | None:
+    async def _recall_context(self, user_text: str, user_id: str | None) -> str | None:
         """Build a 'Relevant context' block from recalled facts + summaries.
 
         Best-effort: returns None on any error or when nothing is found, so chat
@@ -204,7 +204,7 @@ class ChatService:
             from app.services.memory.service import MemoryService
 
             mem = MemoryService(self._db)
-            facts = mem.search(user_text, namespace="user:facts", limit=5)
+            facts = await mem.search(user_text, namespace="user:facts", limit=5)
             summaries = mem.list(kind="summary", limit=3)
             lines = [f"- {m.content}" for m in facts]
             lines += [f"- (earlier) {m.content}" for m in summaries]
@@ -237,7 +237,7 @@ class ChatService:
                 break
         return facts
 
-    def _store_facts(self, user_text: str, user_id: str | None) -> None:
+    async def _store_facts(self, user_text: str, user_id: str | None) -> None:
         """Persist extracted facts under namespace 'user:facts' (deduped)."""
         try:
             facts = self._extract_facts(user_text)
@@ -249,7 +249,7 @@ class ChatService:
             existing = {m.content for m in mem.list(kind="user:facts", limit=200)}
             for fact in facts:
                 if fact not in existing:
-                    mem.add(fact, namespace="user:facts", user_id=user_id)
+                    await mem.add(fact, namespace="user:facts", user_id=user_id)
         except Exception as exc:  # noqa: BLE001 - non-blocking
             logger.debug("fact capture skipped: %s", exc)
 
