@@ -74,11 +74,12 @@ class EmbeddingMemoryProvider(SqliteMemoryProvider):
     ) -> list[MemoryItem]:
         import numpy as np  # lazy
 
-        rows = list(
-            self._db.execute(
-                select(Memory).where(Memory.namespace == namespace)
-            ).scalars()
-        )
+        if namespace.endswith("%"):
+            stmt = select(Memory).where(Memory.namespace.like(namespace))
+        else:
+            stmt = select(Memory).where(Memory.namespace == namespace)
+            
+        rows = list(self._db.execute(stmt).scalars())
         if not rows:
             return []
 

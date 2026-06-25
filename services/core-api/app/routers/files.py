@@ -55,6 +55,16 @@ async def upload_file(
     return _to_detail(record)
 
 
+@router.post("/{file_id}/ingest", response_model=FileDetail)
+async def ingest_file(file_id: str, db: Session = Depends(get_db)) -> FileDetail:
+    service = FileIngestionService(db)
+    try:
+        record = await service.ingest(file_id)
+        return _to_detail(record)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @router.get("", response_model=list[FileOut])
 def list_files(db: Session = Depends(get_db)) -> list[FileOut]:
     service = FileIngestionService(db)

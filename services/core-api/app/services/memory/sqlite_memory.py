@@ -58,10 +58,14 @@ class SqliteMemoryProvider(MemoryProvider):
     async def search(
         self, query: str, *, namespace: str = "default", limit: int = 10
     ) -> list[MemoryItem]:
+        if namespace.endswith("%"):
+            stmt = select(Memory).where(Memory.namespace.like(namespace))
+        else:
+            stmt = select(Memory).where(Memory.namespace == namespace)
+
         stmt = (
-            select(Memory)
-            .where(Memory.namespace == namespace)
-            .where(Memory.content.ilike(f"%{query}%"))
+            stmt.where(Memory.content.ilike(f"%{query}%"))
+            .order_by(Memory.created_at.desc())
             .limit(limit)
         )
         rows = self._db.execute(stmt).scalars().all()

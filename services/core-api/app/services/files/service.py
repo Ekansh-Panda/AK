@@ -130,6 +130,41 @@ class FileIngestionService:
         )
         return record
 
+    async def ingest(self, file_id: str) -> FileRecord:
+        record = self._db.get(FileRecord, file_id)
+        if not record:
+            raise ValueError("file not found")
+
+        from app.core.config import get_effective_bool
+        from app.core.config import settings
+
+        semantic_enabled = get_effective_bool(self._db, "semantic_memory_enabled", settings.SEMANTIC_MEMORY_ENABLED)
+        if not semantic_enabled:
+            raise ValueError("Semantic memory disabled")
+
+        if record.status == "ingested":
+            return record
+
+        if not record.extracted_text:
+            raise ValueError("no text to ingest")
+
+        text = record.extracted_text
+        words = text.split()
+        chunk_size = 500
+        chunks = [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
+
+        from app.services.memory.service import MemoryService
+        mem = MemoryService(self._db)
+        
+        for idx, chunk in enumerate(chunks):
+            await mem.add(chunk, namespace=f"file:{file_id}", meta=f"chunk {idx+1}/{len(chunks)}")
+        
+        record.status = "ingested"
+        self._db.add(record)
+        self._db.commit()
+        self._db.refresh(record)
+        return record
+
     def list(self) -> list[FileRecord]:
         return list(self._db.execute(select(FileRecord)).scalars().all())
 

@@ -27,4 +27,17 @@
 
 **What's flag-gated:** None
 **What's still TODO:** Phases 1–10.
-**Resume point:** Start Phase 1 (Memory: semantic recall).
+
+## Phase 1 — Memory: Semantic Recall
+**What changed:** 
+- `SEMANTIC_MEMORY_ENABLED` config flag added.
+- `MemoryProvider` base class `add` and `search` are now `async`.
+- `SqliteMemoryProvider` implements `async` hooks for base operations.
+- `EmbeddingMemoryProvider` rewritten to use `registry.get().embed()` dynamically, with fallback to substring search.
+- `MemoryService.add/search/summarize_session` made async.
+- Memory routers updated to await memory functions.
+- `ChatService` async functions `_recall_context` and `_store_facts` hooked correctly into `respond()` and `stream_response()`.
+
+**What's flag-gated:** Vector embeddings require `SEMANTIC_MEMORY_ENABLED=True`.
+**What's still TODO:** Phases 2–10.
+**Resume point:** Start Phase 2 (Files: ingestion & RAG).
