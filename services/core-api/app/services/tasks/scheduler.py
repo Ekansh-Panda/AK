@@ -4,10 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.date import DateTrigger
-from apscheduler.triggers.interval import IntervalTrigger
+from typing import Any
 
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -15,7 +12,7 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 # Single global instance of the scheduler
-_scheduler: AsyncIOScheduler | None = None
+_scheduler: Any = None
 
 
 def start_scheduler() -> None:
@@ -27,6 +24,7 @@ def start_scheduler() -> None:
 
     # Delay import to avoid pulling it in when disabled
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    from apscheduler.triggers.interval import IntervalTrigger
 
     _scheduler = AsyncIOScheduler()
     
@@ -60,8 +58,10 @@ async def _maintenance_task() -> None:
 
 def schedule_task_reminder(task_id: str, due_at: datetime) -> None:
     """Schedule a reminder/notification when a task is due."""
-    if not _scheduler or not _scheduler.running:
+    if not _scheduler or not getattr(_scheduler, "running", False):
         return
+
+    from apscheduler.triggers.date import DateTrigger
 
     job_id = f"task_{task_id}_due"
     
@@ -81,7 +81,7 @@ def schedule_task_reminder(task_id: str, due_at: datetime) -> None:
 
 def cancel_task_reminder(task_id: str) -> None:
     """Cancel a scheduled task reminder."""
-    if not _scheduler or not _scheduler.running:
+    if not _scheduler or not getattr(_scheduler, "running", False):
         return
     job_id = f"task_{task_id}_due"
     if _scheduler.get_job(job_id):
