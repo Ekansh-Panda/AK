@@ -101,6 +101,31 @@ async def ws_remote(websocket: WebSocket) -> None:
                     data.get("device_id"),
                 )
 
+            elif msg_type == "frame":
+                if not is_authenticated:
+                    await websocket.send_json({
+                        "type": "error",
+                        "detail": "authentication required for computer-use",
+                    })
+                    continue
+
+                from app.services.computer_use import run_tool
+                action = data.get("action")
+                args = data.get("args", {})
+                try:
+                    result = run_tool(action, args)
+                    await websocket.send_json({
+                        "type": "frame_result",
+                        "status": "success",
+                        "result": result,
+                    })
+                except Exception as exc:
+                    await websocket.send_json({
+                        "type": "frame_result",
+                        "status": "error",
+                        "error": str(exc),
+                    })
+
             else:
                 await websocket.send_json({
                     "type": "error",

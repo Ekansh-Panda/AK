@@ -65,6 +65,14 @@ class Settings(BaseSettings):
     # When True, MemoryService uses embedding + vector search.
     SEMANTIC_MEMORY_ENABLED: bool = False
 
+    # When True, allows the computer-use tool to be armed and used.
+    # [ARCH-CRITICAL] Off by default for safety.
+    COMPUTER_USE_ENABLED: bool = False
+
+    # When True, allows the computer-use tool to execute shell commands.
+    # Must also have COMPUTER_USE_ENABLED=True.
+    COMPUTER_USE_SHELL_ENABLED: bool = False
+
     # Semantic memory model (used only when LITE_MODE is off). Small + CPU-friendly.
     EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
 

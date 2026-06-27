@@ -14,6 +14,29 @@ from app.schemas.settings import SettingOut, SettingUpsert
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 
+# --- Computer Use ---
+
+@router.post("/computer-use/arm", response_model=StatusResponse)
+def arm_computer_use(db: Session = Depends(get_db)) -> StatusResponse:
+    from app.services.computer_use import set_armed
+    if set_armed(True):
+        return StatusResponse(detail="armed")
+    raise HTTPException(status_code=400, detail="Computer use disabled in config")
+
+@router.post("/computer-use/disarm", response_model=StatusResponse)
+def disarm_computer_use(db: Session = Depends(get_db)) -> StatusResponse:
+    from app.services.computer_use import set_armed
+    set_armed(False)
+    return StatusResponse(detail="disarmed")
+
+@router.get("/computer-use/audit")
+def get_computer_use_audit(db: Session = Depends(get_db)):
+    from app.services.computer_use import get_audit_log
+    return get_audit_log()
+
+# --- Key/Value Settings ---
+
+
 @router.get("", response_model=list[SettingOut])
 def list_settings(db: Session = Depends(get_db)) -> list[SettingOut]:
     rows = db.execute(select(Setting)).scalars().all()

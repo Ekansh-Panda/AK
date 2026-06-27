@@ -330,6 +330,21 @@ export const api = {
       method: "DELETE",
     }),
 
+  /* --- Computer Use --- */
+
+  armComputerUse: () =>
+    requestResult<{ detail: string } | null>("/settings/computer-use/arm", null, {
+      method: "POST",
+    }),
+
+  disarmComputerUse: () =>
+    requestResult<{ detail: string } | null>("/settings/computer-use/disarm", null, {
+      method: "POST",
+    }),
+
+  getComputerUseAudit: () =>
+    requestResult<any[]>("/settings/computer-use/audit", []),
+
   /* --- Remote ----------------------------------------------------------- */
 
   /** GET /remote/devices */

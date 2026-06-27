@@ -38,6 +38,8 @@ export function SettingsView() {
   const [statuses, setStatuses] = useState<ApiProviderStatus[]>([]);
   const [theme, setTheme] = useState<"dark" | "midnight">("dark");
   const [lite, setLite] = useState(false);
+  const [computerArmed, setComputerArmed] = useState(false);
+  const [auditLog, setAuditLog] = useState<any[]>([]);
 
   const loadProviders = async () => {
     const [p, s] = await Promise.all([api.listProviders(), api.providerStatus()]);
@@ -49,6 +51,9 @@ export function SettingsView() {
     void loadProviders();
     void api.getSetting(LITE_MODE_KEY).then((r) => {
       if (r.ok && r.data) setLite(r.data.value === "true" || r.data.value === "1");
+    });
+    void api.getComputerUseAudit().then((r) => {
+      if (r.ok && r.data) setAuditLog(r.data);
     });
   }, []);
 
@@ -71,6 +76,17 @@ export function SettingsView() {
     const next = !lite;
     setLite(next);
     await api.putSetting(LITE_MODE_KEY, String(next));
+  };
+
+  const toggleComputerArmed = async () => {
+    if (computerArmed) {
+      await api.disarmComputerUse();
+      setComputerArmed(false);
+    } else {
+      const res = await api.armComputerUse();
+      if (res.ok) setComputerArmed(true);
+      else alert("Computer use is disabled in config. Set COMPUTER_USE_ENABLED=True.");
+    }
   };
 
   return (
@@ -225,6 +241,63 @@ export function SettingsView() {
               />
             </span>
           </button>
+        </SettingRow>
+
+        {/* Computer Use */}
+        <SettingRow
+          title="Computer Use [ARCH-CRITICAL]"
+          description="Allow Miori to take actions on your desktop and run shell commands. Reset on server restart."
+        >
+          <div className="space-y-4">
+            <button
+              onClick={() => void toggleComputerArmed()}
+              className={cn(
+                "flex w-full items-center justify-between rounded px-4 py-3 text-left transition-colors",
+                computerArmed ? "border border-negative/40 bg-negative/10" : "border border-white/[0.06]",
+              )}
+            >
+              <span className="text-sm text-ink font-medium">
+                {computerArmed ? "Computer Use ARMED" : "Computer Use DISARMED"}
+              </span>
+              <span
+                className={cn(
+                  "relative h-5 w-9 rounded-full transition-colors",
+                  computerArmed ? "bg-negative" : "bg-white/15",
+                )}
+              >
+                <span
+                  className={cn(
+                    "absolute top-0.5 h-4 w-4 rounded-full bg-canvas transition-all",
+                    computerArmed ? "left-[1.125rem]" : "left-0.5",
+                  )}
+                />
+              </span>
+            </button>
+            
+            <div className="bg-canvas-subtle border border-white/[0.06] rounded p-4 max-h-64 overflow-y-auto">
+              <h4 className="text-xs font-semibold text-ink mb-2">Audit Log (Last 20 Actions)</h4>
+              {auditLog.length === 0 ? (
+                <p className="text-xs text-ink-faint italic">No actions logged yet.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {auditLog.map((log, i) => (
+                    <li key={i} className="text-xs border-b border-white/[0.04] pb-2 last:border-0 last:pb-0">
+                      <div className="flex justify-between text-ink-faint mb-1">
+                        <span>{new Date(log.ts).toLocaleString()}</span>
+                        <span className="font-mono">{log.action}</span>
+                      </div>
+                      <div className="text-ink break-words">
+                        <span className="opacity-60">Args:</span> {JSON.stringify(log.args)}
+                      </div>
+                      <div className={cn("mt-1", log.error ? "text-negative" : "text-positive")}>
+                        {log.error ? `Error: ${log.error}` : `Outcome: ${log.outcome}`}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
         </SettingRow>
 
         {/* Theme (local) */}

@@ -50,4 +50,15 @@
 
 **What's flag-gated:** File ingestion requires `SEMANTIC_MEMORY_ENABLED=True`.
 **What's still TODO:** Phases 3–10.
-**Resume point:** Start Phase 3 (Remote Presence: WebSocket & Pairing).
+
+## Phase 3 — Remote: real transport and pairing
+**What changed:**
+- Added `pairing_secret_hash` and `bearer_token` to `Device` model.
+- Created `POST /api/remote/devices/{id}/pairing-code` and `POST /api/remote/pair` endpoints.
+- Rewrote `ws/remote.py` to require token authentication.
+- Implemented real WS command relay for remote wake/sleep.
+- Broadcast WS presence updates to the `/ws/status` channel.
+
+**What's flag-gated:** Everything remote requires `REMOTE_ENABLED=True`.
+**What's still TODO:** Phases 4–10.
+**Resume point:** Start Phase 4 (Computer-Use).
