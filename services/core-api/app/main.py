@@ -24,6 +24,7 @@ from app.core.config import settings
 from app.core.logging import get_logger
 from app.db.session import init_db
 from app.routers import (
+    audio,
     chat,
     files,
     health,
@@ -115,6 +116,7 @@ def create_app() -> FastAPI:
 
     # Domain routers under /api.
     api_routers = [
+        audio.router,
         chat.router,
         memory.router,
         files.router,
