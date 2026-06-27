@@ -41,8 +41,24 @@ class MockProvider(ModelProvider):
         *,
         model: str | None = None,
         system_prompt: str | None = None,
-    ) -> str:
-        return self._compose_reply(list(messages))
+        tools: list[dict] | None = None,
+    ) -> str | ChatMessage:
+        reply = self._compose_reply(list(messages))
+        if tools and "task" in reply.lower():
+            # mock tool call
+            return ChatMessage(
+                role="assistant",
+                content=None,
+                tool_calls=[{
+                    "id": "mock_call_1",
+                    "type": "function",
+                    "function": {
+                        "name": "manage_tasks",
+                        "arguments": '{"action": "list"}'
+                    }
+                }]
+            )
+        return reply
 
     async def stream(
         self,
@@ -50,8 +66,24 @@ class MockProvider(ModelProvider):
         *,
         model: str | None = None,
         system_prompt: str | None = None,
-    ) -> AsyncIterator[str]:
+        tools: list[dict] | None = None,
+    ) -> AsyncIterator[str | ChatMessage]:
         reply = self._compose_reply(list(messages))
+        if tools and "task" in reply.lower():
+            yield ChatMessage(
+                role="assistant",
+                content=None,
+                tool_calls=[{
+                    "id": "mock_call_1",
+                    "type": "function",
+                    "function": {
+                        "name": "manage_tasks",
+                        "arguments": '{"action": "list"}'
+                    }
+                }]
+            )
+            return
+            
         for token in reply.split(" "):
             await asyncio.sleep(0.02)  # simulate generation latency
             yield token + " "
