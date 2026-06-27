@@ -61,4 +61,17 @@
 
 **What's flag-gated:** Everything remote requires `REMOTE_ENABLED=True`.
 **What's still TODO:** Phases 4–10.
-**Resume point:** Start Phase 4 (Computer-Use).
+
+## Phase 4 — Computer-Use Tool with Safety Sandbox
+**What changed:**
+- Added `COMPUTER_USE_ENABLED` and `COMPUTER_USE_SHELL_ENABLED` to config (default False).
+- Added `/settings/computer-use/arm`, `disarm`, and `audit` endpoints.
+- Implemented `ComputerUseTool` with screenshot, click, type, keypress, shell.
+- Created robust safety audit log appended to `data/computer_use_audit.log`.
+- Restricted shell execution to `data/computer_use_workspace/`.
+- Exposed computer use in Settings tab in UI.
+- Integrated `{type: "frame"}` remote WS relay to invoke computer use.
+
+**What's flag-gated:** `COMPUTER_USE_ENABLED=True` required for arming.
+**What's still TODO:** Phases 5–10.
+**Resume point:** Start Phase 5 (Tasks & Scheduler).

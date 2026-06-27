@@ -73,6 +73,9 @@ class Settings(BaseSettings):
     # Must also have COMPUTER_USE_ENABLED=True.
     COMPUTER_USE_SHELL_ENABLED: bool = False
 
+    # When True, the APScheduler background task system is spun up.
+    SCHEDULER_ENABLED: bool = False
+
     # Semantic memory model (used only when LITE_MODE is off). Small + CPU-friendly.
     EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
 

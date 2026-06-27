@@ -82,8 +82,13 @@ async def lifespan(app: FastAPI):
         settings.LITE_MODE,
         settings.REMOTE_ENABLED,
     )
+    
+    from app.services.tasks.scheduler import start_scheduler, shutdown_scheduler
+    start_scheduler()
+    
     yield
     # Shutdown.
+    shutdown_scheduler()
     logger.info("Shutting down %s", settings.APP_NAME)
 
 

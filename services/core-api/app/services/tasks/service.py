@@ -48,11 +48,18 @@ class TaskService:
         task = self._db.get(Task, task_id)
         if not task:
             return None
+        due_at_changed = "due_at" in fields and fields["due_at"] != task.due_at
+        
         for key, value in fields.items():
             if value is not None and hasattr(task, key):
                 setattr(task, key, value)
+                
         self._db.commit()
         self._db.refresh(task)
+        
+        if due_at_changed and task.due_at:
+            self._on_task_scheduled(task)
+            
         return task
 
     def delete(self, task_id: str) -> bool:
@@ -61,9 +68,20 @@ class TaskService:
             return False
         self._db.delete(task)
         self._db.commit()
+        
+        try:
+            from app.services.tasks.scheduler import cancel_task_reminder
+            cancel_task_reminder(task_id)
+        except ImportError:
+            pass
+            
         return True
 
     def _on_task_scheduled(self, task: Task) -> None:
-        """Placeholder scheduler hook. No-op until APScheduler is wired in."""
+        """Scheduler hook to register APScheduler jobs for deadlines."""
         if task.due_at is not None:
-            logger.debug("Task %s due at %s (scheduler not wired)", task.id, task.due_at)
+            try:
+                from app.services.tasks.scheduler import schedule_task_reminder
+                schedule_task_reminder(task.id, task.due_at)
+            except ImportError:
+                logger.debug("Task %s due at %s (APScheduler not installed)", task.id, task.due_at)

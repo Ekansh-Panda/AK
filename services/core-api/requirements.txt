@@ -28,3 +28,4 @@ cohere>=5.11
 # Optional semantic-memory deps (LITE_MODE off; lazy-imported)
 sentence-transformers>=2.7
 numpy>=1.26
+APScheduler==3.10.4
