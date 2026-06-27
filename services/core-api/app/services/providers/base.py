@@ -17,7 +17,9 @@ from dataclasses import dataclass
 @dataclass
 class ChatMessage:
     role: str  # "system" | "user" | "assistant" | "tool"
-    content: str
+    content: str | None = None
+    tool_calls: list[dict] | None = None
+    tool_call_id: str | None = None
 
 
 @dataclass
@@ -52,8 +54,9 @@ class ModelProvider(ABC):
         *,
         model: str | None = None,
         system_prompt: str | None = None,
-    ) -> str:
-        """Return a single completion string."""
+        tools: list[dict] | None = None,
+    ) -> str | ChatMessage:
+        """Return a single completion string or a ChatMessage with tool calls."""
 
     @abstractmethod
     async def stream(
@@ -62,8 +65,9 @@ class ModelProvider(ABC):
         *,
         model: str | None = None,
         system_prompt: str | None = None,
-    ) -> AsyncIterator[str]:
-        """Yield completion tokens/chunks as they are produced."""
+        tools: list[dict] | None = None,
+    ) -> AsyncIterator[str | ChatMessage]:
+        """Yield completion tokens/chunks. If tool calls are requested, yield a ChatMessage."""
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """Return embeddings for ``texts``. Optional capability.

@@ -70,18 +70,28 @@ class OpenAICompatibleProvider(ModelProvider):
         model: str | None,
         system_prompt: str | None,
         stream: bool,
+        tools: list[dict] | None = None,
     ) -> dict:
-        wire: list[dict[str, str]] = []
+        wire: list[dict] = []
         if system_prompt:
             wire.append({"role": "system", "content": system_prompt})
         for m in messages:
-            role = m.role if m.role in ("system", "user", "assistant") else "user"
-            wire.append({"role": role, "content": m.content})
-        return {
+            role = m.role if m.role in ("system", "user", "assistant", "tool") else "user"
+            msg_dict = {"role": role, "content": m.content or ""}
+            if m.tool_calls:
+                msg_dict["tool_calls"] = m.tool_calls
+            if m.tool_call_id:
+                msg_dict["tool_call_id"] = m.tool_call_id
+            wire.append(msg_dict)
+            
+        payload = {
             "model": model or self._model,
             "messages": wire,
             "stream": stream,
         }
+        if tools:
+            payload["tools"] = [{"type": "function", "function": t} for t in tools]
+        return payload
 
     # --- inference ---
     async def chat(
@@ -90,13 +100,14 @@ class OpenAICompatibleProvider(ModelProvider):
         *,
         model: str | None = None,
         system_prompt: str | None = None,
-    ) -> str:
+        tools: list[dict] | None = None,
+    ) -> str | ChatMessage:
         if not self.available():
             raise RuntimeError("OpenAI provider unavailable: missing OPENAI_API_KEY")
         import httpx  # lazy
 
         payload = self._payload(
-            messages, model=model, system_prompt=system_prompt, stream=False
+            messages, model=model, system_prompt=system_prompt, stream=False, tools=tools
         )
         async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.post(
@@ -106,7 +117,12 @@ class OpenAICompatibleProvider(ModelProvider):
             )
             resp.raise_for_status()
             data = resp.json()
-        return data["choices"][0]["message"]["content"] or ""
+            
+        choice = data["choices"][0]["message"]
+        if choice.get("tool_calls"):
+            return ChatMessage(role="assistant", content=choice.get("content"), tool_calls=choice["tool_calls"])
+            
+        return choice.get("content") or ""
 
     async def stream(
         self,
@@ -114,14 +130,19 @@ class OpenAICompatibleProvider(ModelProvider):
         *,
         model: str | None = None,
         system_prompt: str | None = None,
-    ) -> AsyncIterator[str]:
+        tools: list[dict] | None = None,
+    ) -> AsyncIterator[str | ChatMessage]:
         if not self.available():
             raise RuntimeError("OpenAI provider unavailable: missing OPENAI_API_KEY")
         import httpx  # lazy
 
         payload = self._payload(
-            messages, model=model, system_prompt=system_prompt, stream=True
+            messages, model=model, system_prompt=system_prompt, stream=True, tools=tools
         )
+        
+        tool_calls_buffer = {}
+        content_buffer = []
+
         async with httpx.AsyncClient(timeout=120.0) as client:
             async with client.stream(
                 "POST",
@@ -139,11 +160,31 @@ class OpenAICompatibleProvider(ModelProvider):
                     try:
                         obj = json.loads(chunk)
                         delta = obj["choices"][0].get("delta", {})
+                        
+                        # Handle tool calls in stream
+                        if "tool_calls" in delta:
+                            for tc in delta["tool_calls"]:
+                                idx = tc["index"]
+                                if idx not in tool_calls_buffer:
+                                    tool_calls_buffer[idx] = tc
+                                else:
+                                    if "function" in tc:
+                                        if "arguments" in tc["function"]:
+                                            tool_calls_buffer[idx]["function"]["arguments"] += tc["function"]["arguments"]
+                        
                         token = delta.get("content")
+                        if token:
+                            content_buffer.append(token)
+                            yield token
                     except (json.JSONDecodeError, KeyError, IndexError):
                         continue
-                    if token:
-                        yield token
+
+        if tool_calls_buffer:
+            yield ChatMessage(
+                role="assistant",
+                content="".join(content_buffer) if content_buffer else None,
+                tool_calls=[tc for tc in tool_calls_buffer.values()]
+            )
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         if not self.available():

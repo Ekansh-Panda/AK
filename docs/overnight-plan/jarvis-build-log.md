@@ -74,4 +74,18 @@
 
 **What's flag-gated:** `COMPUTER_USE_ENABLED=True` required for arming.
 **What's still TODO:** Phases 5–10.
-**Resume point:** Start Phase 5 (Tasks & Scheduler).
+
+## Phase 5 — Tasks & Background Scheduler
+**What changed:**
+- Installed APScheduler.
+- Added `SCHEDULER_ENABLED` to config.
+- Created `services/tasks/scheduler.py` with start/stop and job scheduling.
+- Integrated scheduler into `main.py` lifespan and `TaskService` CRUD operations.
+
+## Phase 6 — Audio (STT / TTS) [Optional/Deferred]
+**What changed:**
+- Created `routers/audio.py` with mocked `/transcribe` and `/synthesize` endpoints.
+- Registered the router in `main.py`.
+
+**What's still TODO:** Phases 7–10.
+**Resume point:** Start Phase 7 (Agent Pipeline & Real Model wiring).

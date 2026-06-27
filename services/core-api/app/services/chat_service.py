@@ -18,6 +18,7 @@ from app.services.persona.service import DEFAULT_MODE, PersonaService
 from app.services.providers.base import ChatMessage
 from app.services.providers.registry import ProviderRegistry
 from app.services.providers.registry import registry as provider_registry
+from app.services.tools.registry import registry as tool_registry
 
 logger = get_logger(__name__)
 
@@ -128,13 +129,50 @@ class ChatService:
             mode, context=await self._recall_context(user_text, user_id)
         )
         try:
-            reply_text = await provider.chat(
-                msgs, model=model, system_prompt=system_prompt
-            )
+            import json
+            
+            tool_schemas = tool_registry.schemas()
+            
+            while True:
+                reply_or_msg = await provider.chat(
+                    msgs, model=model, system_prompt=system_prompt, tools=tool_schemas
+                )
+                
+                if isinstance(reply_or_msg, ChatMessage):
+                    msgs.append(reply_or_msg)
+                    if reply_or_msg.tool_calls:
+                        for tc in reply_or_msg.tool_calls:
+                            tool_name = tc.get("function", {}).get("name")
+                            args_str = tc.get("function", {}).get("arguments", "{}")
+                            try:
+                                args = json.loads(args_str)
+                            except json.JSONDecodeError:
+                                args = {}
+                            
+                            tool = tool_registry.get(tool_name)
+                            if tool:
+                                import asyncio
+                                if asyncio.iscoroutinefunction(tool.run):
+                                    res = await tool.run(**args)
+                                else:
+                                    res = tool.run(**args)
+                            else:
+                                res = f"Tool {tool_name} not found."
+                            
+                            msgs.append(ChatMessage(role="tool", content=str(res), tool_call_id=tc.get("id")))
+                        continue # loop again
+                    else:
+                        reply_text = reply_or_msg.content or ""
+                        break
+                else:
+                    reply_text = reply_or_msg
+                    break
+                    
         except Exception as exc:  # noqa: BLE001 - fall back to mock on failure
             logger.warning("Provider %s chat failed, using mock: %s", provider.name, exc)
             provider = self._providers.get("mock")
             reply_text = await provider.chat(msgs, system_prompt=system_prompt)
+        
         reply = self._persist(session.id, "assistant", reply_text, model=provider.name)
         await self._store_facts(user_text, user_id)
         await self._maybe_summarize(session.id)
@@ -168,11 +206,45 @@ class ChatService:
         )
         chunks: list[str] = []
         try:
-            async for chunk in provider.stream(
-                msgs, model=model, system_prompt=system_prompt
-            ):
-                chunks.append(chunk)
-                yield ("token", chunk)
+            import json
+            tool_schemas = tool_registry.schemas()
+            
+            while True:
+                tool_call_occurred = False
+                async for chunk in provider.stream(
+                    msgs, model=model, system_prompt=system_prompt, tools=tool_schemas
+                ):
+                    if isinstance(chunk, ChatMessage):
+                        msgs.append(chunk)
+                        if chunk.tool_calls:
+                            for tc in chunk.tool_calls:
+                                tool_name = tc.get("function", {}).get("name")
+                                args_str = tc.get("function", {}).get("arguments", "{}")
+                                try:
+                                    args = json.loads(args_str)
+                                except json.JSONDecodeError:
+                                    args = {}
+                                    
+                                tool = tool_registry.get(tool_name)
+                                if tool:
+                                    import asyncio
+                                    if asyncio.iscoroutinefunction(tool.run):
+                                        res = await tool.run(**args)
+                                    else:
+                                        res = tool.run(**args)
+                                else:
+                                    res = f"Tool {tool_name} not found."
+                                
+                                msgs.append(ChatMessage(role="tool", content=str(res), tool_call_id=tc.get("id")))
+                            tool_call_occurred = True
+                            break # restart the stream loop
+                    else:
+                        chunks.append(chunk)
+                        yield ("token", chunk)
+                
+                if not tool_call_occurred:
+                    break
+                    
         except Exception as exc:  # noqa: BLE001 - degrade to mock mid-failure
             logger.warning(
                 "Provider %s stream failed, using mock: %s", provider.name, exc
@@ -181,8 +253,9 @@ class ChatService:
             if not chunks:
                 provider = self._providers.get("mock")
                 async for chunk in provider.stream(msgs, system_prompt=system_prompt):
-                    chunks.append(chunk)
-                    yield ("token", chunk)
+                    if isinstance(chunk, str):
+                        chunks.append(chunk)
+                        yield ("token", chunk)
             else:
                 yield ("error", f"provider error: {exc}")
 
