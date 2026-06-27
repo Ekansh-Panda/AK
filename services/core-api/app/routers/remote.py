@@ -1,6 +1,10 @@
-"""Remote device + session endpoints.
+"""Remote device + session + pairing endpoints.
 
-TODO(Mark-XLVI): secure these with pairing/auth and a real remote transport.
+Pairing flow:
+  1. Desktop: POST /api/remote/devices/{id}/pairing-code → get a 6-char code
+  2. Phone:   POST /api/remote/pair {device_id, code} → get a bearer token
+  3. Phone:   Use bearer token in Authorization header for all subsequent requests
+              and in the /ws/remote WebSocket upgrade (query param `token`)
 """
 
 from __future__ import annotations
@@ -14,9 +18,14 @@ from app.schemas.common import StatusResponse
 from app.schemas.remote import (
     DeviceOut,
     DeviceRegister,
+    PairingCodeOut,
+    PairRequest,
+    PairResponse,
+    PresenceOut,
     RemoteSessionOut,
 )
 from app.services.remote.service import RemoteSessionService
+from app.ws import manager as ws_manager
 
 router = APIRouter(prefix="/remote", tags=["remote"])
 
@@ -39,22 +48,91 @@ def list_devices(db: Session = Depends(get_db)) -> list[DeviceOut]:
 
 
 @router.post("/devices/{device_id}/wake", response_model=DeviceOut)
-def wake_device(device_id: str, db: Session = Depends(get_db)) -> DeviceOut:
+async def wake_device(device_id: str, db: Session = Depends(get_db)) -> DeviceOut:
     service = RemoteSessionService(db)
     device = service.set_device_state(device_id, "online")
     if not device:
         raise HTTPException(status_code=404, detail="device not found")
+    # Broadcast wake command over WS to any connected remote clients.
+    await ws_manager.broadcast("remote", {
+        "type": "command",
+        "action": "wake",
+        "device_id": device_id,
+    })
     return DeviceOut.model_validate(device)
 
 
 @router.post("/devices/{device_id}/sleep", response_model=DeviceOut)
-def sleep_device(device_id: str, db: Session = Depends(get_db)) -> DeviceOut:
+async def sleep_device(device_id: str, db: Session = Depends(get_db)) -> DeviceOut:
     service = RemoteSessionService(db)
     device = service.set_device_state(device_id, "sleeping")
     if not device:
         raise HTTPException(status_code=404, detail="device not found")
+    # Broadcast sleep command over WS.
+    await ws_manager.broadcast("remote", {
+        "type": "command",
+        "action": "sleep",
+        "device_id": device_id,
+    })
     return DeviceOut.model_validate(device)
 
+
+# --- Pairing ---
+
+@router.post("/devices/{device_id}/pairing-code", response_model=PairingCodeOut)
+def generate_pairing_code(
+    device_id: str, db: Session = Depends(get_db)
+) -> PairingCodeOut:
+    """Generate a 6-character pairing code for a device.
+
+    This code is shown in the desktop Settings UI; the remote dashboard user
+    enters it to complete pairing. Codes are single-use and in-memory.
+    """
+    service = RemoteSessionService(db)
+    code = service.generate_pairing_code(device_id)
+    if not code:
+        raise HTTPException(status_code=404, detail="device not found")
+    return PairingCodeOut(device_id=device_id, code=code)
+
+
+@router.post("/pair", response_model=PairResponse)
+def pair_device(body: PairRequest, db: Session = Depends(get_db)) -> PairResponse:
+    """Exchange a pairing code for a bearer token.
+
+    The remote dashboard submits the code shown on the desktop. On success,
+    receives a bearer token for authenticated REST/WS access.
+    """
+    service = RemoteSessionService(db)
+    token = service.pair_with_code(body.device_id, body.code)
+    if not token:
+        raise HTTPException(status_code=403, detail="invalid pairing code")
+    return PairResponse(device_id=body.device_id, token=token)
+
+
+@router.post("/devices/{device_id}/unpair", response_model=DeviceOut)
+def unpair_device(device_id: str, db: Session = Depends(get_db)) -> DeviceOut:
+    """Revoke pairing for a device, invalidating its bearer token."""
+    service = RemoteSessionService(db)
+    device = service.unpair_device(device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="device not found")
+    return DeviceOut.model_validate(device)
+
+
+# --- Presence ---
+
+@router.get("/presence", response_model=PresenceOut)
+def get_presence(db: Session = Depends(get_db)) -> PresenceOut:
+    """Current remote presence: how many WS clients are connected + device list."""
+    service = RemoteSessionService(db)
+    devices = service.list_devices()
+    return PresenceOut(
+        connected_devices=ws_manager.count("remote"),
+        devices=[DeviceOut.model_validate(d) for d in devices],
+    )
+
+
+# --- Sessions ---
 
 @router.post("/devices/{device_id}/sessions", response_model=RemoteSessionOut)
 def create_session(device_id: str, db: Session = Depends(get_db)) -> RemoteSessionOut:

@@ -40,4 +40,14 @@
 
 **What's flag-gated:** Vector embeddings require `SEMANTIC_MEMORY_ENABLED=True`.
 **What's still TODO:** Phases 2–10.
-**Resume point:** Start Phase 2 (Files: ingestion & RAG).
+
+## Phase 2 — Files: Ingestion & RAG
+**What changed:**
+- Added `POST /api/files/{id}/ingest` endpoint to `routers/files.py`.
+- Implemented `FileIngestionService.ingest` to split text into chunks and store in semantic memory under `file:{id}` namespace.
+- Updated `ChatService._recall_context` to search `file:%` namespace and inject file chunks into the LLM context.
+- Graceful 400 error if `SEMANTIC_MEMORY_ENABLED` is false.
+
+**What's flag-gated:** File ingestion requires `SEMANTIC_MEMORY_ENABLED=True`.
+**What's still TODO:** Phases 3–10.
+**Resume point:** Start Phase 3 (Remote Presence: WebSocket & Pairing).
