@@ -428,21 +428,18 @@ it will be recreated on next start. These paths are git-ignored.
 
 ---
 
-## 13. Low-end / Lite mode notes
+## 13. Feature Flags
 
-Miori is built to stay usable on modest hardware:
+Miori is designed to scale down gracefully. You can turn off heavy subsystems using these variables in `services/core-api/.env` (or the root `.env`):
 
-- **`LITE_MODE=true` (default)** keeps heavy/optional dependencies (vector DB,
-  embeddings, heavy model SDKs) **lazy and off**. The app is fully usable with
-  **zero API keys** via the `mock` provider.
-- **SQLite is the default** — no external database server required.
-- Runtime libs (`httpx`, `pypdf`) are light and **imported lazily inside
-  functions**, so the backend still boots even if an optional dep is missing.
-- In lite mode, **memory search is substring/keyword matching** (no embeddings).
-- The frontends are thin; there is no always-on 3D/animation in the baseline and
-  they respect `prefers-reduced-motion`.
-
-Leave `LITE_MODE=true` unless you specifically opt into a heavier feature later.
+- `LITE_MODE=true` (Default: `true`)
+  Disables the vector database, heavy embedding models, and remote pairing. It uses raw SQLite substring search instead. Perfect for laptops or Raspberry Pi.
+- `REMOTE_ENABLED=false` (Default: `false`)
+  Controls whether the dashboard and pairing routes are exposed to the LAN.
+- `COMPUTER_USE_ENABLED=false` (Default: `false`)
+  Controls whether the LLM is allowed to take screenshots and move the mouse.
+- `SCHEDULER_ENABLED=true` (Default: `true`)
+  Enables the background task scheduler which automatically checks for and notifies about due tasks.
 
 ---
 

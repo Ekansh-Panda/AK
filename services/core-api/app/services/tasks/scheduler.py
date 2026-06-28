@@ -28,11 +28,11 @@ def start_scheduler() -> None:
 
     _scheduler = AsyncIOScheduler()
     
-    # Register some default maintenance jobs if needed
+    # Run the task due checker every 60 seconds
     _scheduler.add_job(
-        _maintenance_task,
-        trigger=IntervalTrigger(hours=24),
-        id="daily_maintenance",
+        _check_due_tasks,
+        trigger=IntervalTrigger(seconds=60),
+        id="check_due_tasks",
         replace_existing=True,
     )
     
@@ -49,58 +49,52 @@ def shutdown_scheduler() -> None:
     _scheduler = None
 
 
-async def _maintenance_task() -> None:
-    """A background maintenance task."""
-    logger.info("Running daily maintenance task...")
-    await asyncio.sleep(1)
-    logger.info("Daily maintenance complete.")
+async def _check_due_tasks() -> None:
+    """Find pending tasks that are due, mark them 'due', and broadcast."""
+    from app.db.session import SessionLocal
+    from app.models.task import Task
+    from app.ws import manager
+    from sqlalchemy import select
+    from datetime import datetime
+    import pytz
+
+    db = SessionLocal()
+    try:
+        now = datetime.now(pytz.UTC)
+        stmt = (
+            select(Task)
+            .where(Task.status == "pending")
+            .where(Task.due_at <= now)
+        )
+        due_tasks = db.execute(stmt).scalars().all()
+        
+        for task in due_tasks:
+            task.status = "due"
+            logger.info("Task %s is due! Marking status='due'", task.id)
+            
+            try:
+                await manager.broadcast("status", {
+                    "type": "task",
+                    "id": task.id,
+                    "status": "due",
+                    "title": task.title,
+                })
+            except Exception as exc:
+                logger.error("Failed to broadcast task %s: %s", task.id, exc)
+                
+        if due_tasks:
+            db.commit()
+    except Exception as exc:
+        logger.error("Error checking due tasks: %s", exc)
+    finally:
+        db.close()
 
 
 def schedule_task_reminder(task_id: str, due_at: datetime) -> None:
-    """Schedule a reminder/notification when a task is due."""
-    if not _scheduler or not getattr(_scheduler, "running", False):
-        return
+    """No-op. Handled by the polling _check_due_tasks job instead."""
+    pass
 
-    from apscheduler.triggers.date import DateTrigger
-
-    job_id = f"task_{task_id}_due"
-    
-    # If the due date is in the past, don't schedule
-    if due_at <= datetime.now(due_at.tzinfo):
-        logger.debug("Task %s due_at is in the past, skipping schedule", task_id)
-        return
-
-    _scheduler.add_job(
-        _task_due_callback,
-        trigger=DateTrigger(run_date=due_at),
-        args=[task_id],
-        id=job_id,
-        replace_existing=True,
-    )
-    logger.debug("Scheduled reminder for task %s at %s", task_id, due_at)
 
 def cancel_task_reminder(task_id: str) -> None:
-    """Cancel a scheduled task reminder."""
-    if not _scheduler or not getattr(_scheduler, "running", False):
-        return
-    job_id = f"task_{task_id}_due"
-    if _scheduler.get_job(job_id):
-        _scheduler.remove_job(job_id)
-        logger.debug("Cancelled reminder for task %s", task_id)
-
-
-async def _task_due_callback(task_id: str) -> None:
-    """Fired when a task reaches its due_at timestamp."""
-    logger.info("Task %s is due!", task_id)
-    
-    # In a full implementation, this might broadcast a WS message to the UI
-    # or send a push notification. For Phase 5, we'll log it and broadcast to /ws/status
-    try:
-        from app.ws import manager
-        await manager.broadcast("status", {
-            "type": "notification",
-            "title": "Task Due",
-            "message": f"Task {task_id} is due now.",
-        })
-    except Exception as exc:
-        logger.error("Failed to broadcast task due notification: %s", exc)
+    """No-op. Handled by the polling _check_due_tasks job instead."""
+    pass
