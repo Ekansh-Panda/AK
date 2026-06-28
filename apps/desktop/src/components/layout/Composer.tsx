@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent } from "react";
+import { useRef, useState, useEffect, type KeyboardEvent } from "react";
 import { Paperclip, Mic, ArrowUp } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
@@ -17,7 +17,11 @@ export interface ComposerProps {
 export function Composer({ onSend, placeholder = "Talk to Miori…", disabled }: ComposerProps) {
   const [value, setValue] = useState("");
   const [listening, setListening] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
+  
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<BlobPart[]>([]);
 
   const submit = () => {
     const v = value.trim();
@@ -39,6 +43,63 @@ export function Composer({ onSend, placeholder = "Talk to Miori…", disabled }:
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
+  };
+
+  const toggleRecording = async () => {
+    if (listening && mediaRecorderRef.current) {
+      // Stop recording
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
+      setListening(false);
+      setIsProcessing(true);
+    } else {
+      // Start recording
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mediaRecorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = mediaRecorder;
+        audioChunksRef.current = [];
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) {
+            audioChunksRef.current.push(e.data);
+          }
+        };
+
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+          const formData = new FormData();
+          formData.append("file", audioBlob, "audio.webm");
+
+          try {
+            // Hardcoded URL for now, but ideally uses api client
+            const baseUrl = import.meta.env.VITE_MIORI_API || "http://localhost:8000/api";
+            const res = await fetch(`${baseUrl}/audio/transcribe`, {
+              method: "POST",
+              body: formData,
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data.text) {
+                setValue((prev) => (prev ? prev + " " + data.text : data.text));
+                setTimeout(autoGrow, 0);
+              }
+            } else {
+              console.error("Transcription failed:", res.status, res.statusText);
+            }
+          } catch (e) {
+            console.error("Transcription error:", e);
+          } finally {
+            setIsProcessing(false);
+          }
+        };
+
+        mediaRecorder.start();
+        setListening(true);
+      } catch (err) {
+        console.error("Failed to start recording", err);
+      }
+    }
   };
 
   return (
@@ -73,11 +134,11 @@ export function Composer({ onSend, placeholder = "Talk to Miori…", disabled }:
           size="icon"
           title={listening ? "Stop listening" : "Voice input"}
           aria-label="Voice input"
-          disabled={disabled}
-          onClick={() => setListening((v) => !v)}
+          disabled={disabled || isProcessing}
+          onClick={toggleRecording}
           className={cn(listening && "text-accent")}
         >
-          <Mic size={18} className={cn(listening && "animate-orb-pulse")} />
+          <Mic size={18} className={cn(listening && "animate-orb-pulse", isProcessing && "animate-pulse opacity-50")} />
         </Button>
 
         <Button
