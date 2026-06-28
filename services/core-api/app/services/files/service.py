@@ -153,11 +153,25 @@ class FileIngestionService:
         chunk_size = 500
         chunks = [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
 
-        from app.services.memory.service import MemoryService
-        mem = MemoryService(self._db)
+        from app.models.file_chunk import FileChunk
         
         for idx, chunk in enumerate(chunks):
-            await mem.add(chunk, namespace=f"file:{file_id}", meta=f"chunk {idx+1}/{len(chunks)}")
+            # If semantic memory is on, embed it!
+            embedding = None
+            if semantic_enabled:
+                from app.services.memory.embedding_memory import EmbeddingMemoryProvider
+                # Avoid loading the whole provider if we just need the embedding function,
+                # but since it's already there, use it.
+                provider = EmbeddingMemoryProvider(self._db)
+                embedding = provider._encode(chunk).tolist() if hasattr(provider, "_encode") else None
+
+            row = FileChunk(
+                file_id=file_id,
+                chunk_index=idx,
+                content=chunk,
+                embedding=embedding
+            )
+            self._db.add(row)
         
         record.status = "ingested"
         self._db.add(record)
@@ -182,3 +196,44 @@ class FileIngestionService:
         self._db.delete(record)
         self._db.commit()
         return True
+
+    def search(self, query: str, limit: int = 5) -> list[tuple[FileChunk, float]]:
+        """Search file chunks. Returns (chunk, score)."""
+        from app.core.config import get_effective_bool
+        from app.core.config import settings
+        from app.models.file_chunk import FileChunk
+        
+        semantic_enabled = get_effective_bool(self._db, "semantic_memory_enabled", settings.SEMANTIC_MEMORY_ENABLED)
+        
+        if semantic_enabled:
+            try:
+                from app.services.memory.embedding_memory import EmbeddingMemoryProvider
+                provider = EmbeddingMemoryProvider(self._db)
+                if hasattr(provider, "_encode") and hasattr(FileChunk, "embedding"):
+                    query_emb = provider._encode(query).tolist()
+                    # Using SQLite cosine similarity trick from EmbeddingMemoryProvider
+                    from sqlalchemy import func
+                    import json
+                    # We can't do exact distance in raw SQLite easily without vector extensions.
+                    # Wait! EmbeddingMemoryProvider loads all rows and does numpy dot product!
+                    # Let's do exactly what EmbeddingMemoryProvider does.
+                    rows = self._db.execute(select(FileChunk).where(FileChunk.embedding.isnot(None))).scalars().all()
+                    import numpy as np
+                    scored = []
+                    for r in rows:
+                        try:
+                            # In SQLite JSON columns, it might come back as string or list
+                            arr = r.embedding if isinstance(r.embedding, list) else json.loads(r.embedding)
+                            score = float(np.dot(query_emb, arr))
+                            scored.append((r, score))
+                        except Exception:
+                            continue
+                    scored.sort(key=lambda x: x[1], reverse=True)
+                    return scored[:limit]
+            except Exception as e:
+                logger.warning("File chunk semantic search failed, falling back to LIKE: %s", e)
+        
+        # Lite-mode / fallback: substring match
+        stmt = select(FileChunk).where(FileChunk.content.ilike(f"%{query}%")).limit(limit)
+        rows = self._db.execute(stmt).scalars().all()
+        return [(r, 1.0) for r in rows]

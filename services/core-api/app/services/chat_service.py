@@ -332,13 +332,17 @@ class ChatService:
         """
         try:
             from app.services.memory.service import MemoryService
+            from app.services.files.service import FileIngestionService
 
             mem = MemoryService(self._db)
+            files = FileIngestionService(self._db)
+            
             facts = await mem.search(user_text, namespace="user:facts", limit=5)
-            file_chunks = await mem.search(user_text, namespace="file:%", limit=5)
+            file_results = files.search(user_text, limit=5)
             summaries = mem.list(kind="summary", limit=3)
+            
             lines = [f"- {m.content}" for m in facts]
-            lines += [f"- [file excerpt] {m.content}" for m in file_chunks]
+            lines += [f"- [file excerpt] {chunk.content}" for chunk, score in file_results]
             lines += [f"- (earlier) {m.content}" for m in summaries]
             if not lines:
                 return None

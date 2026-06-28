@@ -65,6 +65,21 @@ async def ingest_file(file_id: str, db: Session = Depends(get_db)) -> FileDetail
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+@router.get("/search", response_model=list[dict])
+def search_files(q: str, k: int = 5, db: Session = Depends(get_db)) -> list[dict]:
+    service = FileIngestionService(db)
+    results = service.search(query=q, limit=k)
+    return [
+        {
+            "file_id": chunk.file_id,
+            "chunk_index": chunk.chunk_index,
+            "content": chunk.content,
+            "score": score
+        }
+        for chunk, score in results
+    ]
+
+
 @router.get("", response_model=list[FileOut])
 def list_files(db: Session = Depends(get_db)) -> list[FileOut]:
     service = FileIngestionService(db)

@@ -156,19 +156,31 @@ Lightweight namespaced memory store for the lite memory provider.
 
 > **Embeddings intentionally absent.** Vector recall is an optional upgrade (Odysseus/Khoj); add an embedding column or external vector reference only when heavy memory is wired in. See [system-overview §6](system-overview.md#low-end-machine-optimization-rules).
 
-### `files` — `models/file.py`
-Metadata for uploaded files; bytes live on disk under `UPLOAD_DIR`.
+### `files` (FileRecord) — `models/file.py`
+Stores metadata for uploaded/ingested files.
 
 | Column | Type | Notes |
 |---|---|---|
-| `id` | string(36) PK | UUID |
-| `user_id` | string(36) FK → `users.id` | nullable, indexed |
-| `filename` | string(255) | original name |
-| `content_type` | string(128) | nullable |
-| `size_bytes` | int | default `0` |
-| `storage_path` | string(1024) | path on disk |
-| `status` | string(32) | `uploaded` / `ingesting` / `ingested` / `failed` |
-| timestamps | datetime | mixin |
+| `id` | String(36) | UUID PK |
+| `user_id` | String(36) | Nullable owner |
+| `filename` | String | Original or safe name |
+| `content_type` | String | Nullable MIME type |
+| `size_bytes` | Integer | Raw byte size |
+| `storage_path` | String | Local path (under UPLOAD_DIR) |
+| `status` | String | e.g. "uploaded", "ingested", "failed" |
+| `extracted_text` | Text | Nullable extracted plain text |
+
+### `file_chunks` (FileChunk) — `models/file.py`
+Stores indexed chunks of ingested files for semantic search.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | String(36) | UUID PK |
+| `file_id` | String(36) | FK to `files.id` (CASCADE) |
+| `chunk_index` | Integer | Order of the chunk in the file |
+| `content` | Text | Chunk text |
+| `embedding` | JSON | Nullable vector embedding |
+| `created_at` | DateTime | | mixin |
 
 ### `settings` — `models/setting.py`
 Key/value application settings + feature flags surfaced to the UI.

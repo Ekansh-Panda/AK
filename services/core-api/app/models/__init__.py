@@ -2,6 +2,7 @@
 
 from app.models.device import Device
 from app.models.file import FileRecord
+from app.models.file_chunk import FileChunk
 from app.models.memory import Memory
 from app.models.message import Message
 from app.models.session import ChatSession
@@ -17,5 +18,6 @@ __all__ = [
     "Message",
     "Setting",
     "Task",
-    "User",
+    "FileRecord",
+    "FileChunk",
 ]

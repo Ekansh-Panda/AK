@@ -23,3 +23,12 @@ class FileDetail(FileOut):
     """Detail view (GET /files/{id}) — includes the full extracted text."""
 
     extracted_text: str | None = None
+
+
+class FileChunkOut(TimestampedORMModel):
+    """View of a single indexed file chunk."""
+
+    file_id: str
+    chunk_index: int
+    content: str
+    score: float | None = None
