@@ -50,15 +50,15 @@
 |---|---|---|---|---|---|
 | **Remote dashboard** | Mark-XLVI / MARK-XL | Device list + presence UI, pairing/handshake flow, lightweight control surface (not a cockpit) | `apps/remote-dashboard/` · `services/core-api/app/routers/remote.py` · `services/core-api/app/ws/remote.py` | P0 | mocked |
 | **Workspace tabs (pages)** | Mark-XLVI (layout ideas only) | Tabbed workspace shell: Chat, Files, Memory, Projects, Research, Tasks, Remote, Settings | `apps/desktop/src/features/{chat,files,memory,projects,research,tasks,remote,settings}/` · `apps/desktop/src/components/layout/` | P0 | mocked |
-| **Semantic memory** | Odysseus, Khoj | Namespaced memory store, write/search/recall API, ranking ideas. Embeddings stay optional | `services/core-api/app/services/memory/` · `services/core-api/app/models/memory.py` · `services/core-api/app/routers/memory.py` | P0→P1 | mocked |
-| **Persona system** | Mark-XLVI (operator tone), Odysseus (agent voice) | Persona modes (friend/operator/researcher/coder), warm friend-first system prompts, prompt profiles | `services/core-api/app/services/persona/` · `packages/prompts/` · `services/core-api/app/routers/persona.py` | P0 | mocked |
-| **Model/provider abstraction** | Odysseus, computer-use repos | Provider interface (chat/stream/embed), pluggable OpenAI/Anthropic/Ollama/local, lite default | `services/core-api/app/services/providers/` · `services/core-api/app/routers/providers.py` | P0→P1 | mocked |
-| **Tool registry** | computer-use repos, Odysseus | Tool descriptor schema, register/list/invoke contract, capability gating | `services/core-api/app/services/tools/` | P0 | mocked |
+| **Semantic memory** | Odysseus, Khoj | Namespaced memory store, write/search/recall API, ranking ideas. Embeddings stay optional | `services/core-api/app/services/memory/` · `services/core-api/app/models/memory.py` · `services/core-api/app/routers/memory.py` | P0→P1 | implemented |
+| **Persona system** | Mark-XLVI (operator tone), Odysseus (agent voice) | Persona modes (friend/operator/researcher/coder), warm friend-first system prompts, prompt profiles | `services/core-api/app/services/persona/` · `packages/prompts/` · `services/core-api/app/routers/persona.py` | P0 | implemented |
+| **Model/provider abstraction** | Odysseus, computer-use repos | Provider interface (chat/stream/embed), pluggable OpenAI/Anthropic/Ollama/local, lite default | `services/core-api/app/services/providers/` · `services/core-api/app/routers/providers.py` | P0→P1 | implemented |
+| **Tool registry** | computer-use repos, Odysseus | Tool descriptor schema, register/list/invoke contract, capability gating | `services/core-api/app/services/tools/` | P0 | implemented |
 | **Computer-use** | computer-use repos, Mark-XLVI | Sandboxed action contracts (screenshot, click, type, shell), safety gating, opt-in only | `services/core-api/app/services/tools/` (computer-use tools) · `services/core-api/app/routers/remote.py` | P2 | planned |
-| **File ingestion** | Khoj | Upload → store metadata → ingest/index pipeline, doc parsing, search-over-files | `services/core-api/app/services/files/` · `services/core-api/app/models/file.py` · `services/core-api/app/routers/files.py` | P1 | mocked |
-| **Tasks / automation** | Khoj (scheduler), Mark-XLVI | Task CRUD, status lifecycle, scheduled/recurring jobs (APScheduler later) | `services/core-api/app/services/tasks/` · `services/core-api/app/models/task.py` · `services/core-api/app/routers/tasks.py` | P0→P2 | mocked |
+| **File ingestion** | Khoj | Upload → store metadata → ingest/index pipeline, doc parsing, search-over-files | `services/core-api/app/services/files/` · `services/core-api/app/models/file.py` · `services/core-api/app/routers/files.py` | P1 | implemented |
+| **Tasks / automation** | Khoj (scheduler), Mark-XLVI | Task CRUD, status lifecycle, scheduled/recurring jobs (APScheduler later) | `services/core-api/app/services/tasks/` · `services/core-api/app/models/task.py` · `services/core-api/app/routers/tasks.py` | P0→P2 | implemented |
 | **Voice** | computer-use repos (I/O patterns) | STT/TTS pipeline contract, push-to-talk + presence-orb reactive audio | `services/core-api/app/services/providers/` (voice provider) · `apps/desktop/src/features/chat/` | P2 | planned |
-| **Chat streaming** | Odysseus, Mark-XLVI | Token streaming over WebSocket, partial-message UX, cancel/regenerate | `services/core-api/app/ws/chat.py` · `services/core-api/app/services/providers/` · `apps/desktop/src/features/chat/` | P0 | mocked |
+| **Chat streaming** | Odysseus, Mark-XLVI | Token streaming over WebSocket, partial-message UX, cancel/regenerate | `services/core-api/app/ws/chat.py` · `services/core-api/app/services/providers/` · `apps/desktop/src/features/chat/` | P0 | implemented |
 
 ---
 
@@ -69,7 +69,7 @@
 | **Presence orb / identity** | Inspiration only (Jarvis/HoloJarvis — visual cue, **not** architecture) | A single living "presence" element that breathes/reacts; friend-not-cockpit feel | `apps/desktop/src/components/` (PresenceOrb) · see [visual-inspirations](ui-spec/visual-inspirations.md) | P1 | planned |
 | **Shared design system** | shadcn/ui + Tailwind | Tokens, glassy dark theme, shared UI primitives across desktop + dashboard | `packages/ui/` · `apps/desktop/src/components/ui/` · `apps/*/tailwind.config.ts` | P0 | mocked |
 | **WebSocket status bus** | Mark-XLVI | Live status/heartbeat channel (device + task + provider health) | `services/core-api/app/ws/status.py` · `apps/desktop/src/state/` | P0 | mocked |
-| **Settings / config** | — | Key/value settings, lite-mode + feature flags surfaced to UI | `services/core-api/app/models/setting.py` · `services/core-api/app/routers/settings.py` · `services/core-api/app/core/config.py` | P0 | mocked |
+| **Settings / config** | — | Key/value settings, lite-mode + feature flags surfaced to UI | `services/core-api/app/models/setting.py` · `services/core-api/app/routers/settings.py` · `services/core-api/app/core/config.py` | P0 | implemented |
 | **Multi-agent orchestration** | Odysseus | Agent loop + sub-agent delegation over the tool registry | `services/core-api/app/services/` (orchestrator, future) | P2 | planned |
 
 ---

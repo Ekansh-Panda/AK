@@ -49,17 +49,17 @@ forward.**
   - [x] Lazy-import each provider SDK (only when selected)
   - [x] API-key config via `settings` table (`active_provider`) + `.env`
   - [x] Real token streaming through `/ws/chat` (mock fallback on missing key / mid-call error)
-- [ ] **Memory retrieval** — upgrade from keyword to semantic recall (`services/core-api/app/services/memory/`)
+- [x] **Memory retrieval** — upgrade from keyword to semantic recall (`services/core-api/app/services/memory/`)
   - [x] Memory pinning + `?kind=&pinned=&limit=` filtering + conversation summaries (every 10 turns)
-  - [ ] Optional embedding provider (lazy, off in lite mode)
-  - [ ] Optional vector index (no mandatory vector DB)
-  - [ ] `recall()` wired into the chat orchestration loop
+  - [x] Optional embedding provider (lazy, off in lite mode)
+  - [x] Optional vector index (no mandatory vector DB)
+  - [x] `recall()` wired into the chat orchestration loop
 - [ ] **Remote transport** — real device pairing + relay (`services/core-api/app/services/remote/`, `ws/remote.py`)
   - [ ] Pairing secrets / auth tokens on `devices` (extend `models/device.py`)
   - [ ] Live presence over `/ws/remote`; dashboard reaches paired devices
 - [x] **File ingestion** — text extraction (text/code/PDF) on upload (`services/core-api/app/services/files/`)
   - [x] `POST /api/files` extracts text (413 over `MAX_UPLOAD_BYTES`); `GET /api/files/{id}` returns `extracted_text`
-  - [ ] Chunk → index pipeline; searchable content feeding memory/research
+  - [x] Chunk → index pipeline; searchable content feeding memory/research
 - [ ] **Persona depth** — mode-specific tuned prompts + memory-aware tone (`packages/prompts/`)
 - [ ] **Status bus** — real event fan-out (provider health, task, device) over `/ws/status`
 - [ ] **Presence orb** reactive to real chat/voice state
@@ -70,10 +70,10 @@ forward.**
 
 ## v0.3 — Advanced automation
 
-- [ ] **Computer-use** — sandboxed actions (screenshot/click/type/shell), safety gating, opt-in only (`services/core-api/app/services/tools/`, `ws/remote.py`)
+- [x] **Computer-use** — sandboxed actions (screenshot/click/type/shell), safety gating, opt-in only (`services/core-api/app/services/tools/`, `ws/remote.py`)
 - [ ] **Voice pipeline** — STT/TTS, push-to-talk, amplitude-reactive orb (`services/providers/` voice, `apps/desktop/src/features/chat/`)
-- [ ] **Multi-agent orchestration** — agent loop + sub-agent delegation over the tool registry
-- [ ] **Task scheduler** — APScheduler recurring/cron jobs; add `cron`/`next_run` to `models/task.py`
+- [x] **Multi-agent orchestration** — agent loop + sub-agent delegation over the tool registry
+- [x] **Task scheduler** — APScheduler recurring/cron jobs; add `cron`/`next_run` to `models/task.py`
 - [ ] **Projects & Research** pages graduate from placeholders to real workspaces
 - [ ] **Packaging** — Tauri installers for Windows/Linux/macOS; backend bundling; first-run setup
 - [ ] **3D presence orb** as an opt-in, setting-gated enhancement (still off by default for low-end)
@@ -92,7 +92,7 @@ forward.**
 
 ---
 
-## Mocked vs implemented (as of v1)
+## Mocked vs implemented (as of v0.2)
 
 ### Real / implemented
 - [x] Monorepo + desktop shell + remote dashboard shell, both wired to the backend
@@ -107,13 +107,17 @@ forward.**
 - [x] **File text ingestion** (text/code/PDF) on upload
 - [x] Memory **pinning + filtering + conversation summaries**
 - [x] Setup docs (`docs/setup/INSTALLATION.md`) + dev scripts (`env-validate`, `db-init`)
+- [x] **Semantic memory** (ChromaDB + SentenceTransformers) + chat recall integration
+- [x] **File indexing** (chunking + ingestion pipeline)
+- [x] **Task scheduler** (APScheduler + background tasks)
+- [x] **Computer-use tools** (PyAutoGUI + sandbox + audit log)
+- [x] **Agent tool-calling loop** (LLM invokes tools iteratively)
 
-### Still mocked / lite (to be made real in v0.2)
-- [ ] Memory search = **keyword/substring** (no embeddings) → v0.2
-- [ ] Persona = **static friend-first prompt** (no mode tuning) → v0.2
-- [ ] Remote = **mock device presence**, no real pairing/transport → v0.2
-- [ ] Status bus = **heartbeat + canned events** → v0.2
+### Still mocked / lite (to be made real in v0.3)
+- [ ] Persona = **static friend-first prompt** (no mode tuning)
+- [ ] Remote = **mock device presence**, no real pairing/transport
+- [ ] Status bus = **heartbeat + canned events**
+- [ ] Voice = **mock provider endpoints**
 
 ### Deferred (interface/TODO only)
-- [ ] Semantic memory · real remote transport · chunk/index pipeline → v0.2
-- [ ] Computer-use · voice · multi-agent · scheduler · packaging → v0.3
+- [ ] packaging → v0.3
