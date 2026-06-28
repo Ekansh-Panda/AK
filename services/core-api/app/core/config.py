@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     # providers) lazy/disabled so Miori stays usable on low-end machines.
     LITE_MODE: bool = True
 
+    # If set, enforces Bearer token auth in get_current_user. If None, open.
+    MIORI_API_TOKEN: str | None = None
+
     # When True, MemoryService uses embedding + vector search.
     SEMANTIC_MEMORY_ENABLED: bool = False
 
