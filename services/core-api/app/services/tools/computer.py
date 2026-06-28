@@ -14,6 +14,7 @@ class ComputerUseTool(Tool):
         "Take actions on the local machine: screenshot, click, type, keypress, shell. "
         "Will fail if disarmed by the user."
     )
+    requires_approval = True
     schema = {
         "type": "object",
         "properties": {

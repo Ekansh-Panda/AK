@@ -99,6 +99,15 @@ Gated by `REMOTE_ENABLED`.
 | POST | `/api/settings/computer-use/disarm` | — | `{detail: "disarmed"}` | implemented |
 | GET | `/api/settings/computer-use/audit` | — | list of audit logs | implemented |
 
+### Tools — `/api/tools` · `routers/tools.py`
+| Method | Path | Request | Response | Status |
+|---|---|---|---|---|
+| GET | `/api/tools/pending` | — | list of pending `tool_call_id` strings | implemented |
+| POST | `/api/tools/approve` | `{tool_call_id}` | `{detail: "approved"}` | implemented |
+| POST | `/api/tools/reject` | `{tool_call_id}` | `{detail: "rejected"}` | implemented |
+
+> Tools with `requires_approval=True` (e.g. `computer_use`) pause the ReAct loop and broadcast a `tool_approval` event over `/ws/status` before executing. The frontend or dashboard can then `POST /api/tools/approve` or `/reject`.
+
 ---
 
 ## WebSocket `/ws`

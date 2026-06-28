@@ -151,11 +151,36 @@ class ChatService:
                             
                             tool = tool_registry.get(tool_name)
                             if tool:
-                                import asyncio
-                                if asyncio.iscoroutinefunction(tool.run):
-                                    res = await tool.run(**args)
+                                if getattr(tool, "requires_approval", False) and tc.get("id"):
+                                    from app.services.tools.approval import register_pending_approval
+                                    from app.ws import manager
+                                    tc_id = tc["id"]
+                                    await manager.broadcast("status", {
+                                        "type": "tool_approval",
+                                        "tool_call_id": tc_id,
+                                        "tool_name": tool_name,
+                                        "args": args
+                                    })
+                                    future = register_pending_approval(tc_id)
+                                    try:
+                                        approved = await future
+                                    except asyncio.CancelledError:
+                                        approved = False
+                                        
+                                    if not approved:
+                                        res = f"Tool {tool_name} execution was REJECTED by the user."
+                                    else:
+                                        import asyncio
+                                        if asyncio.iscoroutinefunction(tool.run):
+                                            res = await tool.run(**args)
+                                        else:
+                                            res = tool.run(**args)
                                 else:
-                                    res = tool.run(**args)
+                                    import asyncio
+                                    if asyncio.iscoroutinefunction(tool.run):
+                                        res = await tool.run(**args)
+                                    else:
+                                        res = tool.run(**args)
                             else:
                                 res = f"Tool {tool_name} not found."
                             
@@ -227,11 +252,36 @@ class ChatService:
                                     
                                 tool = tool_registry.get(tool_name)
                                 if tool:
-                                    import asyncio
-                                    if asyncio.iscoroutinefunction(tool.run):
-                                        res = await tool.run(**args)
+                                    if getattr(tool, "requires_approval", False) and tc.get("id"):
+                                        from app.services.tools.approval import register_pending_approval
+                                        from app.ws import manager
+                                        tc_id = tc["id"]
+                                        await manager.broadcast("status", {
+                                            "type": "tool_approval",
+                                            "tool_call_id": tc_id,
+                                            "tool_name": tool_name,
+                                            "args": args
+                                        })
+                                        future = register_pending_approval(tc_id)
+                                        try:
+                                            approved = await future
+                                        except asyncio.CancelledError:
+                                            approved = False
+                                            
+                                        if not approved:
+                                            res = f"Tool {tool_name} execution was REJECTED by the user."
+                                        else:
+                                            import asyncio
+                                            if asyncio.iscoroutinefunction(tool.run):
+                                                res = await tool.run(**args)
+                                            else:
+                                                res = tool.run(**args)
                                     else:
-                                        res = tool.run(**args)
+                                        import asyncio
+                                        if asyncio.iscoroutinefunction(tool.run):
+                                            res = await tool.run(**args)
+                                        else:
+                                            res = tool.run(**args)
                                 else:
                                     res = f"Tool {tool_name} not found."
                                 

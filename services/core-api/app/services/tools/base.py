@@ -19,6 +19,8 @@ class Tool(ABC):
     name: str = "tool"
     #: Human / model readable description.
     description: str = ""
+    #: Whether this tool requires explicit user approval before execution.
+    requires_approval: bool = False
 
     @property
     def schema(self) -> dict[str, Any]:

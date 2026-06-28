@@ -34,6 +34,7 @@ from app.routers import (
     remote,
     settings as settings_router,
     tasks,
+    tools,
 )
 from app.services.tools.examples import register_example_tools
 from app.ws import chat as ws_chat
@@ -123,6 +124,7 @@ def create_app() -> FastAPI:
         providers.router,
         persona.router,
         tasks.router,
+        tools.router,
         settings_router.router,
     ]
     if settings.REMOTE_ENABLED:
