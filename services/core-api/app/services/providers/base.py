@@ -43,6 +43,14 @@ class ModelProvider(ABC):
         """
         return True
 
+    async def ping(self) -> bool:
+        """Best-effort reachability check.
+        
+        Real providers can override this to do a cheap HTTP GET to their base URL
+        and return False on connection errors. Defaults to True if available().
+        """
+        return self.available()
+
     @abstractmethod
     def list_models(self) -> list[ModelDescriptor]:
         """Return the models this provider exposes."""

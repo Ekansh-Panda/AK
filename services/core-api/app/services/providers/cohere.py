@@ -26,6 +26,20 @@ class CohereProvider(ModelProvider):
     def available(self) -> bool:
         return bool(self._api_key)
 
+    async def ping(self) -> bool:
+        if not self.available():
+            return False
+        import httpx
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(
+                    "https://api.cohere.com/v1/models",
+                    headers={"Authorization": f"Bearer {self._api_key}"},
+                )
+                return True
+        except Exception:
+            return False
+
     def list_models(self) -> list[ModelDescriptor]:
         return [ModelDescriptor(id=self._model, name=self._model, provider=self.name)]
 

@@ -120,6 +120,21 @@ class ProviderRegistry:
             )
         return out
 
+    async def ping_all(self) -> dict[str, bool]:
+        """Ping every configured provider concurrently. Returns {name: reachable}."""
+        import asyncio
+
+        configured = [(n, p) for n, p in self._providers.items() if p.available()]
+        if not configured:
+            return {}
+        names = [n for n, _ in configured]
+        tasks = [p.ping() for _, p in configured]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        return {
+            name: (result is True)
+            for name, result in zip(names, results)
+        }
+
 
 # Process-wide registry: mock (always available) + real providers (gated on keys).
 registry = ProviderRegistry()

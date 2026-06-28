@@ -33,6 +33,19 @@ class GeminiProvider(ModelProvider):
     def available(self) -> bool:
         return bool(self._api_key)
 
+    async def ping(self) -> bool:
+        if not self.available():
+            return False
+        import httpx
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(
+                    f"{_BASE}/models", params={"key": self._api_key}
+                )
+                return True
+        except Exception:
+            return False
+
     def list_models(self) -> list[ModelDescriptor]:
         return [
             ModelDescriptor(

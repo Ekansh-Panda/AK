@@ -41,10 +41,39 @@ class OpenAICompatibleProvider(ModelProvider):
         )
         self._base_url = (base_url or settings.OPENAI_BASE_URL).rstrip("/")
         self._model = model or settings.OPENAI_MODEL
+        
+        self._last_ping_status = None
+        self._last_ping_time = 0.0
 
     # --- availability ---
     def available(self) -> bool:
         return bool(self._api_key)
+        
+    async def ping(self) -> bool:
+        if not self.available():
+            return False
+            
+        import time
+        now = time.time()
+        if self._last_ping_status is not None and (now - self._last_ping_time) < 60:
+            return self._last_ping_status
+            
+        import httpx
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(f"{self._base_url}/models", headers=self._headers())
+                # OpenRouter might return 401 if key is bad, or 200. We just want to check if host is up
+                # and credentials are at least not instantly rejecting connection. 
+                # Actually, some APIs don't have /models. A simple GET to base_url might 404.
+                # So we just check for connection success, ignoring 404/401 for reachability.
+                # If we get a response, the host is reachable.
+                self._last_ping_status = True
+        except Exception as e:
+            logger.debug(f"{self.name} ping failed: {e}")
+            self._last_ping_status = False
+            
+        self._last_ping_time = now
+        return self._last_ping_status
 
     def list_models(self) -> list[ModelDescriptor]:
         return [

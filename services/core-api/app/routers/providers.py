@@ -66,6 +66,12 @@ def provider_status() -> list[ProviderStatus]:
     ]
 
 
+@router.get("/ping")
+async def ping_providers() -> dict[str, bool]:
+    """Ping all configured providers concurrently. Returns {name: reachable}."""
+    return await registry.ping_all()
+
+
 @router.put("/active", response_model=ActiveProviderOut)
 def set_active_provider(
     body: SetActiveProvider, db: Session = Depends(get_db)

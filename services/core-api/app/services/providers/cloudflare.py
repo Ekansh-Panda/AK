@@ -30,6 +30,20 @@ class CloudflareProvider(ModelProvider):
     def available(self) -> bool:
         return bool(self._api_key and self._account_id)
 
+    async def ping(self) -> bool:
+        if not self.available():
+            return False
+        import httpx
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(
+                    f"{_BASE}/accounts/{self._account_id}/ai/models/search",
+                    headers=self._headers(),
+                )
+                return True
+        except Exception:
+            return False
+
     def list_models(self) -> list[ModelDescriptor]:
         return [ModelDescriptor(id=self._model, name=self._model, provider=self.name)]
 
