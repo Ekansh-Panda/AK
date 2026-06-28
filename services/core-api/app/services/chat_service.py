@@ -130,8 +130,11 @@ class ChatService:
         )
         try:
             import json
-            
-            tool_schemas = tool_registry.schemas()
+            from app.core.config import get_effective_bool
+            from app.services.settings_service import AGENT_MODE_KEY
+
+            agent_mode = get_effective_bool(self._db, AGENT_MODE_KEY, True)
+            tool_schemas = tool_registry.schemas() if agent_mode else []
             
             while True:
                 reply_or_msg = await provider.chat(
@@ -232,7 +235,11 @@ class ChatService:
         chunks: list[str] = []
         try:
             import json
-            tool_schemas = tool_registry.schemas()
+            from app.core.config import get_effective_bool
+            from app.services.settings_service import AGENT_MODE_KEY
+
+            agent_mode = get_effective_bool(self._db, AGENT_MODE_KEY, True)
+            tool_schemas = tool_registry.schemas() if agent_mode else []
             
             while True:
                 tool_call_occurred = False
