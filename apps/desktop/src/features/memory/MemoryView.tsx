@@ -58,7 +58,7 @@ export function MemoryView() {
     try {
       const r = await api.createMemory({
         content,
-        namespace: kind || "default",
+        namespace: kind || "user:facts",
       });
       if (r.ok) {
         setDraft("");

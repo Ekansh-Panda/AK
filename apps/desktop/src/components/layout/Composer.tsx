@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, type KeyboardEvent } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import { Paperclip, Mic, ArrowUp } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";

@@ -237,6 +237,10 @@ export const api = {
   fileDetail: (id: string) =>
     requestResult<ApiFileDetail | null>(`/files/${encodeURIComponent(id)}`, null),
 
+  /** GET /files/search?q= — search files using chunk-level or fallback matching. */
+  searchFiles: (q: string) =>
+    requestResult<ApiFile[]>(`/files/search?q=${encodeURIComponent(q)}`, []),
+
   /** POST /files — multipart upload. Returns 413 status on oversize. */
   uploadFile: (file: File) => {
     const form = new FormData();
@@ -344,6 +348,52 @@ export const api = {
 
   getComputerUseAudit: () =>
     requestResult<any[]>("/settings/computer-use/audit", []),
+
+  /* --- Projects --------------------------------------------------------- */
+
+  /** GET /projects */
+  listProjects: (status?: string) => {
+    const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+    return requestResult<any[]>(`/projects${qs}`, []);
+  },
+
+  /** POST /projects */
+  createProject: (body: { name: string; description?: string; brief?: string }) =>
+    requestResult<any>("/projects", null, { method: "POST", ...json(body) }),
+
+  /** PATCH /projects/{id} */
+  updateProject: (id: string, body: { name?: string; description?: string; status?: string; brief?: string }) =>
+    requestResult<any>(`/projects/${encodeURIComponent(id)}`, null, {
+      method: "PATCH",
+      ...json(body),
+    }),
+
+  /** DELETE /projects/{id} */
+  deleteProject: (id: string) =>
+    requestResult<any>(`/projects/${encodeURIComponent(id)}`, null, { method: "DELETE" }),
+
+  /* --- Research --------------------------------------------------------- */
+
+  /** GET /research */
+  listResearch: () => requestResult<any[]>("/research", []),
+
+  /** POST /research — launch a new session */
+  createResearch: (query: string) =>
+    requestResult<any>("/research", null, { method: "POST", ...json({ query }) }),
+
+  /** GET /research/{id} */
+  getResearch: (id: string) =>
+    requestResult<any>(`/research/${encodeURIComponent(id)}`, null),
+
+  /** DELETE /research/{id} */
+  deleteResearch: (id: string) =>
+    requestResult<any>(`/research/${encodeURIComponent(id)}`, null, { method: "DELETE" }),
+
+  /* --- Provider Ping ---------------------------------------------------- */
+
+  /** GET /providers/ping — concurrent reachability check. */
+  pingProviders: () =>
+    requestResult<Record<string, boolean>>("/providers/ping", {}),
 
   /* --- Remote ----------------------------------------------------------- */
 

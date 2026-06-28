@@ -7,8 +7,10 @@ import {
   File as FileIcon,
   Trash2,
   X,
+  Search,
 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
+import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ScrollArea } from "@/components/ui/ScrollArea";
 import { api } from "@/lib/api";
@@ -50,6 +52,7 @@ export function FilesView() {
   const [busy, setBusy] = useState(false);
   const [detail, setDetail] = useState<ApiFileDetail | null>(null);
   const [offline, setOffline] = useState(false);
+  const [query, setQuery] = useState("");
 
   const load = async () => {
     const r = await api.listFiles();
@@ -58,8 +61,18 @@ export function FilesView() {
   };
 
   useEffect(() => {
-    void load();
-  }, []);
+    const handler = setTimeout(() => {
+      if (query.trim()) {
+        api.searchFiles(query.trim()).then((r) => {
+          setOffline(!r.ok);
+          setFiles(r.data);
+        });
+      } else {
+        load();
+      }
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [query]);
 
   const upload = async (list: FileList | null) => {
     if (!list || list.length === 0) return;
@@ -139,6 +152,19 @@ export function FilesView() {
           onChange={(e) => void upload(e.target.files)}
         />
       </label>
+
+      {/* Search */}
+      <div className="mb-6 flex items-center gap-2">
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search files…"
+          className="flex-1"
+        />
+        <Button variant="ghost" size="icon" disabled>
+          <Search size={16} />
+        </Button>
+      </div>
 
       {notice && (
         <div className="mb-4 rounded border border-warn/40 bg-warn/10 px-4 py-2 text-xs text-ink-soft">

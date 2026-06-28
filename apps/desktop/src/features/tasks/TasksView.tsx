@@ -33,7 +33,7 @@ export function TasksView() {
           user_id: null,
           title: t.title,
           description: null,
-          status: t.done ? "done" : "open",
+          status: t.done ? "done" : "pending",
           due_at: null,
         })),
       );
@@ -61,7 +61,7 @@ export function TasksView() {
   };
 
   const toggle = async (t: ApiTask) => {
-    const next = isDone(t) ? "open" : "done";
+    const next = isDone(t) ? "pending" : "done";
     setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: next } : x)));
     await api.updateTask(t.id, { status: next });
     void load();

@@ -39,6 +39,7 @@ export function SettingsView() {
   const [theme, setTheme] = useState<"dark" | "midnight">("dark");
   const [lite, setLite] = useState(false);
   const [computerArmed, setComputerArmed] = useState(false);
+  const [schedulerEnabled, setSchedulerEnabled] = useState(true);
   const [auditLog, setAuditLog] = useState<any[]>([]);
 
   const loadProviders = async () => {
@@ -51,6 +52,9 @@ export function SettingsView() {
     void loadProviders();
     void api.getSetting(LITE_MODE_KEY).then((r) => {
       if (r.ok && r.data) setLite(r.data.value === "true" || r.data.value === "1");
+    });
+    void api.getSetting("scheduler_enabled").then((r) => {
+      if (r.ok && r.data) setSchedulerEnabled(r.data.value === "true" || r.data.value === "1");
     });
     void api.getComputerUseAudit().then((r) => {
       if (r.ok && r.data) setAuditLog(r.data);
@@ -76,6 +80,12 @@ export function SettingsView() {
     const next = !lite;
     setLite(next);
     await api.putSetting(LITE_MODE_KEY, String(next));
+  };
+
+  const toggleScheduler = async () => {
+    const next = !schedulerEnabled;
+    setSchedulerEnabled(next);
+    await api.putSetting("scheduler_enabled", String(next));
   };
 
   const toggleComputerArmed = async () => {
@@ -237,6 +247,35 @@ export function SettingsView() {
                 className={cn(
                   "absolute top-0.5 h-4 w-4 rounded-full bg-canvas transition-all",
                   lite ? "left-[1.125rem]" : "left-0.5",
+                )}
+              />
+            </span>
+          </button>
+        </SettingRow>
+
+        {/* Scheduler mode (persisted via PUT /settings) */}
+        <SettingRow
+          title="Background Scheduler"
+          description="Allow Miori to run background tasks like checking due tasks and pinging providers."
+        >
+          <button
+            onClick={() => void toggleScheduler()}
+            className={cn(
+              "flex w-full items-center justify-between rounded px-4 py-3 text-left transition-colors",
+              schedulerEnabled ? "border border-accent/40 bg-accent/10" : "border border-white/[0.06]",
+            )}
+          >
+            <span className="text-sm text-ink">{schedulerEnabled ? "Scheduler enabled" : "Scheduler disabled"}</span>
+            <span
+              className={cn(
+                "relative h-5 w-9 rounded-full transition-colors",
+                schedulerEnabled ? "bg-accent" : "bg-white/15",
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute top-0.5 h-4 w-4 rounded-full bg-canvas transition-all",
+                  schedulerEnabled ? "left-[1.125rem]" : "left-0.5",
                 )}
               />
             </span>
