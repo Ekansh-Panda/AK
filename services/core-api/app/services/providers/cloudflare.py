@@ -47,7 +47,7 @@ class CloudflareProvider(ModelProvider):
             wire.append({"role": "system", "content": system_prompt})
         for m in messages:
             role = m.role if m.role in ("system", "user", "assistant") else "user"
-            wire.append({"role": role, "content": m.content})
+            wire.append({"role": role, "content": m.content or ""})
         return wire
 
     async def chat(
@@ -56,6 +56,7 @@ class CloudflareProvider(ModelProvider):
         *,
         model: str | None = None,
         system_prompt: str | None = None,
+        tools: list[dict] | None = None,
     ) -> str:
         if not self.available():
             raise RuntimeError("Cloudflare provider unavailable: missing key/account")
@@ -77,6 +78,7 @@ class CloudflareProvider(ModelProvider):
         *,
         model: str | None = None,
         system_prompt: str | None = None,
+        tools: list[dict] | None = None,
     ) -> AsyncIterator[str]:
         if not self.available():
             raise RuntimeError("Cloudflare provider unavailable: missing key/account")

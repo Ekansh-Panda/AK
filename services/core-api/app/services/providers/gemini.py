@@ -54,7 +54,7 @@ class GeminiProvider(ModelProvider):
             if m.role == "system":
                 continue
             role = "model" if m.role == "assistant" else "user"
-            contents.append({"role": role, "parts": [{"text": m.content}]})
+            contents.append({"role": role, "parts": [{"text": m.content or ""}]})
         payload: dict = {"contents": contents}
         if system_prompt:
             payload["systemInstruction"] = {"parts": [{"text": system_prompt}]}
@@ -75,6 +75,7 @@ class GeminiProvider(ModelProvider):
         *,
         model: str | None = None,
         system_prompt: str | None = None,
+        tools: list[dict] | None = None,
     ) -> str:
         if not self.available():
             raise RuntimeError("Gemini provider unavailable: missing GEMINI_API_KEY")
@@ -98,6 +99,7 @@ class GeminiProvider(ModelProvider):
         *,
         model: str | None = None,
         system_prompt: str | None = None,
+        tools: list[dict] | None = None,
     ) -> AsyncIterator[str]:
         if not self.available():
             raise RuntimeError("Gemini provider unavailable: missing GEMINI_API_KEY")

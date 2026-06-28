@@ -37,7 +37,7 @@ class HuggingFaceProvider(ModelProvider):
             wire.append({"role": "system", "content": system_prompt})
         for m in messages:
             role = m.role if m.role in ("system", "user", "assistant") else "user"
-            wire.append({"role": role, "content": m.content})
+            wire.append({"role": role, "content": m.content or ""})
         return wire
 
     def _client(self):
@@ -51,6 +51,7 @@ class HuggingFaceProvider(ModelProvider):
         *,
         model: str | None = None,
         system_prompt: str | None = None,
+        tools: list[dict] | None = None,
     ) -> str:
         if not self.available():
             raise RuntimeError("HuggingFace provider unavailable: missing token")
@@ -68,6 +69,7 @@ class HuggingFaceProvider(ModelProvider):
         *,
         model: str | None = None,
         system_prompt: str | None = None,
+        tools: list[dict] | None = None,
     ) -> AsyncIterator[str]:
         if not self.available():
             raise RuntimeError("HuggingFace provider unavailable: missing token")

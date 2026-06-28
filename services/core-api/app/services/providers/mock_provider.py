@@ -29,7 +29,7 @@ class MockProvider(ModelProvider):
     def _compose_reply(self, messages: Iterable[ChatMessage]) -> str:
         last_user = ""
         for m in messages:
-            if m.role == "user":
+            if m.role == "user" and m.content:
                 last_user = m.content
         if not last_user:
             return "Hey, I'm here. What's on your mind?"
@@ -43,8 +43,9 @@ class MockProvider(ModelProvider):
         system_prompt: str | None = None,
         tools: list[dict] | None = None,
     ) -> str | ChatMessage:
-        reply = self._compose_reply(list(messages))
-        if tools and "task" in reply.lower():
+        msgs = list(messages)
+        reply = self._compose_reply(msgs)
+        if tools and "task" in reply.lower() and msgs and msgs[-1].role == "user":
             # mock tool call
             return ChatMessage(
                 role="assistant",
@@ -68,8 +69,9 @@ class MockProvider(ModelProvider):
         system_prompt: str | None = None,
         tools: list[dict] | None = None,
     ) -> AsyncIterator[str | ChatMessage]:
-        reply = self._compose_reply(list(messages))
-        if tools and "task" in reply.lower():
+        msgs = list(messages)
+        reply = self._compose_reply(msgs)
+        if tools and "task" in reply.lower() and msgs and msgs[-1].role == "user":
             yield ChatMessage(
                 role="assistant",
                 content=None,

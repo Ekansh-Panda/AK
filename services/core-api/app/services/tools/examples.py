@@ -8,6 +8,7 @@ from typing import Any
 from app.services.tools.base import Tool
 from app.services.tools.registry import ToolRegistry, registry
 from app.services.tools.computer import ComputerUseTool
+from app.services.tools.tasks import TaskTool
 
 
 class EchoTool(Tool):
@@ -37,6 +38,6 @@ class TimeTool(Tool):
 def register_example_tools(target: ToolRegistry | None = None) -> None:
     """Register built-in example tools into the given (or default) registry."""
     target = target or registry
-    for tool in (EchoTool(), TimeTool(), ComputerUseTool()):
+    for tool in (EchoTool(), TimeTool(), ComputerUseTool(), TaskTool()):
         if target.get(tool.name) is None:
             target.register(tool)

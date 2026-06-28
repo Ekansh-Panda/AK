@@ -46,7 +46,7 @@ def main():
     print("\n--- 2. Sending Chat Message ---")
     res = requests.post(
         f"{BASE_URL}/chat",
-        json={"text": "what tasks do I have?"}
+        json={"message": "what tasks do I have?"}
     )
     if res.status_code != 200:
         print(f"Failed to chat: {res.text}")
