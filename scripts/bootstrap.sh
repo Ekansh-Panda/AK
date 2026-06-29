@@ -5,6 +5,10 @@
 # ============================================================================
 set -euo pipefail
 
+# Bypass tmpfs disk quota issues on Arch Linux / VMs by using disk-backed tmp
+export TMPDIR=/var/tmp
+export PIP_NO_CACHE_DIR=1
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
@@ -31,7 +35,7 @@ fi
 # shellcheck disable=SC1091
 source .venv/bin/activate
 pip install --quiet --upgrade pip
-pip install --quiet -r requirements.txt
+pip install --quiet --no-cache-dir -r requirements.txt
 echo "  ✓ backend dependencies installed"
 deactivate
 popd >/dev/null

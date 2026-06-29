@@ -141,6 +141,11 @@ class Settings(BaseSettings):
     CLOUDFLARE_ACCOUNT_ID: str | None = None
     CLOUDFLARE_MODEL: str = "@cf/meta/llama-3.1-8b-instruct"
 
+    # ElevenLabs TTS
+    ELEVENLABS_API_KEY: str | None = None
+    # Gigi is a sweet, youthful, energetic voice
+    ELEVENLABS_VOICE_ID: str = "jBpfuIE2acCO8z3wKNLl"
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def _split_cors(cls, value: object) -> object:

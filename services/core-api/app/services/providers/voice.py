@@ -5,8 +5,10 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
-from app.core.config import settings
+from app.core.config import get_settings
 from app.core.logging import get_logger
+
+settings = get_settings()
 
 logger = get_logger(__name__)
 
@@ -92,9 +94,55 @@ class OpenAIVoiceProvider(VoiceProvider):
         
         # alloy, echo, fable, onyx, nova, and shimmer
         payload = {
-            "model": "tts-1",
+            "model": "tts-1-hd",
             "input": text,
-            "voice": voice or "alloy",
+            "voice": voice or "nova",
+        }
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(url, headers=headers, json=payload)
+            resp.raise_for_status()
+            return resp.content
+
+class ElevenLabsVoiceProvider(VoiceProvider):
+    name = "elevenlabs"
+
+    def __init__(self) -> None:
+        self.api_key = getattr(settings, "ELEVENLABS_API_KEY", None)
+        # Default to a sweet, young, human-like female voice (e.g., Gigi)
+        self.default_voice_id = getattr(settings, "ELEVENLABS_VOICE_ID", "jBpfuIE2acCO8z3wKNLl")
+
+    def available(self) -> bool:
+        return bool(self.api_key)
+
+    async def transcribe(self, audio_data: bytes, content_type: str) -> str:
+        # ElevenLabs doesn't currently do STT. Fall back to unavailable.
+        raise NotImplementedError("ElevenLabs does not support transcription in this implementation")
+
+    async def synthesize(self, text: str, voice: str | None = None) -> bytes:
+        if not self.available():
+            raise RuntimeError("ElevenLabs API key missing")
+
+        import httpx  # Lazy import
+        
+        voice_id = voice or self.default_voice_id
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+        
+        headers = {
+            "Accept": "audio/mpeg",
+            "xi-api-key": self.api_key,
+            "Content-Type": "application/json",
+        }
+        
+        payload = {
+            "text": text,
+            "model_id": "eleven_multilingual_v2",
+            "voice_settings": {
+                "stability": 0.5,
+                "similarity_boost": 0.75,
+                "style": 0.0,
+                "use_speaker_boost": True
+            }
         }
 
         async with httpx.AsyncClient(timeout=30) as client:
@@ -108,11 +156,15 @@ class VoiceRegistry:
         self._providers: dict[str, VoiceProvider] = {
             "mock": MockVoiceProvider(),
             "openai": OpenAIVoiceProvider(),
+            "elevenlabs": ElevenLabsVoiceProvider(),
         }
 
     def get(self, name: str | None = None) -> VoiceProvider:
-        # If no name requested, use openai if available, else mock
+        # If no name requested, prefer elevenlabs > openai > mock
         if name is None:
+            elevenlabs = self._providers["elevenlabs"]
+            if elevenlabs.available():
+                return elevenlabs
             openai = self._providers["openai"]
             if openai.available():
                 return openai

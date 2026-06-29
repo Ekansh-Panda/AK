@@ -86,7 +86,8 @@ sudo dnf install -y webkit2gtk4.1-devel openssl-devel curl wget file \
 # Arch
 sudo pacman -S --needed webkit2gtk-4.1 base-devel curl wget file \
   openssl appmenu-gtk-module libappindicator-gtk3 librsvg gtk3
-```
+
+> **Note for Arch Users:** Tauri v2 requires `webkit2gtk-4.1`. If you experience "no space left on device" or "disk quota reached" errors when compiling native node modules or running pip, it's because Arch uses a RAM-backed tmpfs for `/tmp`. The included `scripts/bootstrap.sh` script automatically sets `TMPDIR=/var/tmp` and `PIP_NO_CACHE_DIR=1` to bypass this.
 
 ### macOS
 
@@ -193,6 +194,7 @@ The fastest path is the bootstrap script — it creates the backend venv, instal
 
 ```bash
 # bash / macOS / Linux
+# (Automatically uses /var/tmp and --no-cache-dir to bypass tmpfs disk quota limits)
 bash scripts/bootstrap.sh
 ```
 
@@ -379,6 +381,7 @@ to `mock`** — it never crashes.
 | `mock` | — | Always available; echoes your last message. Offline fallback. |
 | `openai` | `OPENAI_API_KEY` | OpenAI Chat Completions. Default model `gpt-4o-mini`. |
 | `gemini` | `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) | Google Generative Language API. Default model `gemini-1.5-flash`. |
+| `elevenlabs` | `ELEVENLABS_API_KEY` | High fidelity voice TTS. Default voice is Gigi (`jBpfuIE2acCO8z3wKNLl`). |
 
 Set keys in `services/core-api/.env`:
 
@@ -398,6 +401,9 @@ OPENAI_MODEL=llama3.1
 
 # Gemini
 GEMINI_API_KEY=...
+
+# ElevenLabs (for sweet, human-like voice synthesis)
+ELEVENLABS_API_KEY=...
 ```
 
 **Pick the active provider** — in the desktop app's **Settings** page, or via
@@ -488,7 +494,8 @@ which keys are detected.
 - **macOS:** run `xcode-select --install`.
 - Clear a corrupt build: delete `apps/desktop/src-tauri/target/` and rebuild.
 
-**Backend imports fail / `ModuleNotFoundError`**
+**Backend imports fail / `ModuleNotFoundError` / Disk Quota errors**
+If pip fails with "no space left on device" (common on Arch Linux tmpfs), use `TMPDIR=/var/tmp pip install --no-cache-dir -r requirements.txt`. The `bootstrap.sh` script does this automatically.
 Activate the venv first, then `pip install -r services/core-api/requirements.txt`.
 Run `uvicorn`/`python` from inside `services/core-api` so `app.*` resolves.
 
